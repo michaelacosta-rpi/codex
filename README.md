@@ -1,4 +1,4 @@
-# Codex Admin Portal
+# virtual mediation hosting admin portal
 
 A static, RBAC-aware admin SPA prototype built directly from the guidance in `docs/admin_spa_plan.md`. It includes curated data for users, roles, orders, sessions, feature flags, and audit logs to demonstrate the core flows described in the plan (navigation, impersonation, RBAC-aware buttons, and observability panels).
 

@@ -1,6 +1,7 @@
 import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents } from './data/mockData.js';
 import { formatMoney, formatDate, createEl } from './components/utils.js';
 import { adminPortalOrigin } from './config.js';
+import { initTelemetry, logEvent, recordMetric } from './telemetry.js';
 
 const routes = [
   { path: '', label: 'Dashboard', icon: '🧭', permissions: [] },
@@ -13,6 +14,12 @@ const routes = [
 ];
 
 let currentUser = users[0];
+
+const getRouteKey = () => (window.location.hash.replace('#/', '') || '').split('?')[0];
+
+initTelemetry({
+  getContext: () => ({ userId: currentUser.id, userRoles: currentUser.roles, route: getRouteKey() })
+});
 
 function hasPermission(permission) {
   if (permission.length === 0) return true;
@@ -70,6 +77,8 @@ function renderSidebar() {
   });
   select.onchange = (e) => {
     currentUser = users.find((u) => u.id === e.target.value) || currentUser;
+    logEvent('user.impersonate', { to: currentUser.id, email: currentUser.email });
+    recordMetric('user.impersonate', 1, { userId: currentUser.id });
     render();
   };
 
@@ -86,6 +95,8 @@ function renderMain() {
   const hash = window.location.hash.replace('#/', '');
   const routeKey = hash.split('?')[0];
   const activeRoute = routes.find((r) => r.path === routeKey) || routes[0];
+  logEvent('navigation.view', { route: activeRoute.path, label: activeRoute.label });
+  recordMetric('navigation.view', 1, { route: activeRoute.path || 'dashboard' });
   const crumbs = createEl('div', 'breadcrumbs', [createEl('span', null, ['Home']), createEl('span', null, [activeRoute.label])]);
   const connectionChip = createEl('div', 'chip soft', [`Admin portal: ${adminPortalOrigin}`]);
   const actions = createEl('div', 'topbar-actions', [connectionChip, renderUserMenu()]);
@@ -125,7 +136,11 @@ function renderUserMenu() {
   const meta = createEl('div', 'stack', [createEl('strong', null, [currentUser.name]), createEl('span', 'muted', [currentUser.email])]);
   menu.appendChild(meta);
   const logout = createEl('button', 'button', ['Simulate Logout']);
-  logout.onclick = () => alert('Auth placeholder: implement JWT flow per plan.');
+  logout.onclick = () => {
+    logEvent('auth.logout.simulated', { userId: currentUser.id });
+    recordMetric('auth.logout', 1, { userId: currentUser.id });
+    alert('Auth placeholder: implement JWT flow per plan.');
+  };
   menu.appendChild(logout);
   return menu;
 }
@@ -368,5 +383,10 @@ function renderAudit() {
   return section;
 }
 
-window.addEventListener('hashchange', render);
-document.addEventListener('DOMContentLoaded', render);
+window.addEventListener('hashchange', () => {
+  render();
+});
+document.addEventListener('DOMContentLoaded', () => {
+  logEvent('app.render.start', { route: getRouteKey() });
+  render();
+});

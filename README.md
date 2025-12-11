@@ -9,8 +9,7 @@ No build tooling is required. Serve the repository root with any static HTTP ser
 - **Admin portal**: `http://localhost:4173` (renders `index.html`).
 - **Client portal**: `http://localhost:4173/client.html` (renders the customer-facing experience built in `src/client.js`).
 
-The client portal reads live customer data from the configured client API origin (default `/api/client`) and expects JSON response
-s for:
+The client portal reads live customer data from the configured client API origin (default `/api/client`) and expects JSON responses for:
 
 - `GET /profile`
 - `GET /library`
@@ -31,10 +30,10 @@ The portal can be deployed as a four-container stack to mirror the broader syste
 
 ```
 docker build -t codex-admin-portal .
-docker run -p 4173:80 -e ADMIN_PORTAL_ORIGIN=http://admin-portal codex-admin-portal
+docker run -p 4173:80 -e ADMIN_PORTAL_ORIGIN=http://admin codex-admin-portal
 ```
 
-`ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA will reference for admin communication (defaults to `http://admin-portal:4173`).
+`ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA will reference for admin communication (defaults to `http://admin:4173`).
 
 ### Compose the four-container stack
 

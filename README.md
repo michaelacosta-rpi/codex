@@ -34,7 +34,7 @@ docker build -t codex-admin-portal .
 docker run -p 4173:80 -e ADMIN_PORTAL_ORIGIN=http://admin codex-admin-portal
 ```
 
-`ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA will reference for admin communication (defaults to `http://admin:4173`).
+`ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA will reference for admin communication (defaults to `http://admin`).
 
 ### Compose the four-container stack
 

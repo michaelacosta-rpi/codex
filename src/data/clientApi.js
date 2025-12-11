@@ -31,8 +31,14 @@ const fallbackVideoSessions = [
     cacheMinutes: 60,
     startedAt: null,
     sides: [
-      { label: 'Policyholder side', waitingGuests: 1 },
-      { label: 'Carrier side', waitingGuests: 0 }
+      {
+        label: 'Policyholder side',
+        waitingGuests: [
+          { name: 'Alex (guest)' },
+          { name: 'Taylor (guest)' }
+        ]
+      },
+      { label: 'Carrier side', waitingGuests: [] }
     ],
     participants: [
       { name: 'Dana Johnson', designation: 'Client', authenticated: true },

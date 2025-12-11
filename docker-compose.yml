@@ -1,21 +1,47 @@
 version: '3.9'
 
 services:
-  client-spa:
+  admin:
     build: .
-    image: codex-client-spa:latest
-    container_name: codex-client-spa
+    image: codex-admin-spa:latest
+    container_name: codex-admin-spa
     environment:
-      ADMIN_PORTAL_ORIGIN: http://admin-portal
+      ADMIN_PORTAL_ORIGIN: http://admin
     ports:
       - "4173:80"
     depends_on:
-      - admin-portal
+      - video-hosting-service
+      - database
 
-  admin-portal:
+  client:
     image: nginx:1.27-alpine
-    container_name: codex-admin-portal
+    container_name: codex-client-spa
     volumes:
       - ./docs:/usr/share/nginx/html:ro
     ports:
       - "4174:80"
+    depends_on:
+      - admin
+
+  video-hosting-service:
+    image: nginx:1.27-alpine
+    container_name: codex-video-hosting
+    volumes:
+      - ./docker/video-hosting-service:/usr/share/nginx/html:ro
+    ports:
+      - "4175:80"
+
+  database:
+    image: postgres:16-alpine
+    container_name: codex-database
+    environment:
+      POSTGRES_USER: codex
+      POSTGRES_PASSWORD: codex
+      POSTGRES_DB: codex
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres-data:

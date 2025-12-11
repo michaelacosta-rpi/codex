@@ -2,6 +2,12 @@
 
 This document outlines a detailed plan for building an admin single-page application that covers user administration, sales management, and session oversight. It includes role-based access control (RBAC), audit logging, and feature flags, alongside proposed API endpoints, database tables, and test coverage.
 
+## Containerized local stack
+- **Admin**: this SPA served from the repository image.
+- **Client**: companion SPA container for end-user flows.
+- **Video hosting service**: placeholder HTTP service representing the media backend used for session links.
+- **Database**: PostgreSQL instance for local data and feature testing.
+
 ## Functional Areas
 - **User Administration**: Create/edit/deactivate users, manage roles and permissions, password resets, MFA status.
 - **Sales Management**: View and edit orders, refunds, discounts, invoicing, and customer account data.

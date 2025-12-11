@@ -24,6 +24,12 @@
 - **Deployment**
   - Containerized services orchestrated via Kubernetes with GitOps deployment, blue/green rollouts, and WAF in front of API gateways.
 
+## Local container topology
+- **Admin**: the admin portal SPA container for operations teams.
+- **Client**: a companion SPA container mirroring the end-user portal.
+- **Video hosting service**: placeholder media service container for session entry points.
+- **Database**: PostgreSQL container for local data and feature demos.
+
 ## Admin Portal Priorities
 - **Operations dashboard**: live sessions, breakout usage, mediator load, SLA alerts.
 - **Case lifecycle**: intake triage, party verification/KYC, mediator assignment, scheduling, agreement drafting, and archival.

@@ -39,6 +39,20 @@ const fallbackVideoSessions = [
         addedBy: 'Case intake automation'
       }
     ],
+    breakoutRooms: [
+      {
+        id: 'brk-100',
+        name: 'Plaintiff caucus',
+        participants: ['Dana Johnson', 'Leah Kim'],
+        createdAt: Date.now() - 20 * 60 * 1000
+      },
+      {
+        id: 'brk-101',
+        name: 'Carrier caucus',
+        participants: ['Chris Patel'],
+        createdAt: Date.now() - 10 * 60 * 1000
+      }
+    ],
     sides: [
       {
         label: 'Policyholder side',

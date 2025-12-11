@@ -401,6 +401,32 @@ textarea {
   flex-wrap: wrap;
 }
 
+.share-path {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.share-chip {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(13, 28, 46, 0.03);
+}
+
+.share-chip.active {
+  border-color: var(--primary);
+  background: rgba(31, 111, 235, 0.08);
+}
+
+.share-chip.inactive {
+  opacity: 0.7;
+}
+
+.pill-checkbox.disabled {
+  opacity: 0.6;
+}
+
 .pill-checkbox {
   display: inline-flex;
   align-items: center;

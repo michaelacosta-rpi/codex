@@ -1,4 +1,4 @@
-import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents } from './data/mockData.js';
+import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents } from './data/referenceData.js';
 import { formatMoney, formatDate, createEl } from './components/utils.js';
 import { adminPortalOrigin } from './config.js';
 import { initTelemetry, logEvent, recordMetric } from './telemetry.js';

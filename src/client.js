@@ -1,5 +1,5 @@
 import { createEl, formatDate, formatMoney } from './components/utils.js';
-import { clientProfile, libraryItems, invoices, supportTickets, timeline } from './data/clientData.js';
+import { fetchClientPortalData } from './data/clientApi.js';
 import { adminPortalOrigin } from './config.js';
 
 const routes = [
@@ -9,30 +9,103 @@ const routes = [
   { path: 'support', label: 'Support' }
 ];
 
+const state = {
+  loading: true,
+  error: null,
+  data: null
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await hydrate();
+  render();
+});
+
+window.addEventListener('hashchange', render);
+
+async function hydrate() {
+  state.loading = true;
+  state.error = null;
+  render();
+
+  try {
+    state.data = await fetchClientPortalData();
+  } catch (err) {
+    state.error = err;
+  } finally {
+    state.loading = false;
+  }
+}
+
 function getRoute() {
   return window.location.hash.replace('#/', '') || '';
 }
 
 function render() {
   const app = document.getElementById('client-app');
+  if (!app) return;
+
   app.innerHTML = '';
+  app.appendChild(renderBackdrop());
+
+  if (state.loading) {
+    app.appendChild(renderLoading());
+    return;
+  }
+
+  if (state.error) {
+    app.appendChild(renderError());
+    return;
+  }
+
   app.appendChild(renderHero());
   app.appendChild(renderNav());
   app.appendChild(renderContent());
 }
 
+function renderBackdrop() {
+  return createEl('div', 'client-backdrop');
+}
+
+function renderLoading() {
+  const shell = createEl('div', 'card shell');
+  shell.appendChild(createEl('div', 'shimmer title')); 
+  shell.appendChild(createEl('div', 'shimmer body')); 
+  shell.appendChild(createEl('div', 'shimmer body long')); 
+  return createEl('div', 'client-layout', [shell]);
+}
+
+function renderError() {
+  const retry = createEl('button', 'button primary', ['Retry']);
+  retry.onclick = async () => {
+    await hydrate();
+    render();
+  };
+
+  return createEl('div', 'client-layout', [
+    createEl('div', 'card error-card', [
+      createEl('div', 'section-header', [createEl('h3', null, ['Unable to load portal']), createEl('span', 'badge warning', ['Service'])]),
+      createEl('p', 'muted', ['Something went wrong while contacting the client API. Check connectivity or try again.']),
+      createEl('div', 'hero-actions', [retry])
+    ])
+  ]);
+}
+
 function renderHero() {
+  const profile = state.data?.profile || {};
   const hero = createEl('div', 'client-hero');
   const meta = createEl('div', 'hero-meta', [
-    createEl('h1', null, [`${clientProfile.company} Client Portal`]),
-    createEl('div', 'muted', [`Primary contact: ${clientProfile.contact} · ${clientProfile.email}`]),
-    createEl('div', null, [`Customer success: ${clientProfile.successManager}`])
+    createEl('div', 'eyebrow', ['Client workspace']),
+    createEl('h1', null, [`${profile.company || 'Client'} Portal`]),
+    createEl('div', 'muted', [`Primary contact: ${profile.contact || '—'} · ${profile.email || ''}`]),
+    createEl('div', null, [`Customer success: ${profile.successManager || '—'}`])
   ]);
 
   const actions = createEl('div', 'hero-actions', [
     createEl('button', 'button primary', ['New upload']),
-    createEl('button', 'button outline', [`Admin portal (${adminPortalOrigin})`])
+    createEl('a', 'button ghost', [`Admin portal (${adminPortalOrigin})`])
   ]);
+
+  actions.lastChild.href = adminPortalOrigin;
 
   hero.appendChild(meta);
   hero.appendChild(actions);
@@ -74,14 +147,12 @@ function renderContent() {
 }
 
 function renderOverview() {
+  const profile = state.data?.profile || {};
+  const timeline = state.data?.timeline || [];
   const section = createEl('div', 'grid');
-  section.appendChild(createStatCard('Plan', `${clientProfile.plan} · ${clientProfile.supportLevel} support`, `Renews ${formatDate(clientProfile.renewalDate)}`));
-  section.appendChild(
-    createStatCard('Seats', `${clientProfile.seatsUsed}/${clientProfile.seatsTotal} used`, `${clientProfile.seatsTotal - clientProfile.seatsUsed} seats available`)
-  );
-  section.appendChild(
-    createStatCard('Storage', `${clientProfile.storageUsedGb} GB`, `of ${clientProfile.storageTotalGb} GB allocated`)
-  );
+  section.appendChild(createStatCard('Plan', `${profile.plan || '—'} · ${profile.supportLevel || 'Support'}`, `Renews ${formatDate(profile.renewalDate)}`));
+  section.appendChild(createStatCard('Seats', `${profile.seatsUsed || 0}/${profile.seatsTotal || 0} used`, `${(profile.seatsTotal || 0) - (profile.seatsUsed || 0)} seats available`));
+  section.appendChild(createStatCard('Storage', `${profile.storageUsedGb || 0} GB`, `of ${profile.storageTotalGb || 0} GB allocated`));
 
   const guardrails = createEl('div', 'grid');
   guardrails.appendChild(
@@ -93,7 +164,7 @@ function renderOverview() {
   guardrails.appendChild(
     createEl('div', 'card', [
       createEl('div', 'section-header', [createEl('h3', null, ['Recent activity']), createEl('span', 'muted', ['Automated updates'])]),
-      createTimeline()
+      createTimeline(timeline)
     ])
   );
   guardrails.appendChild(
@@ -110,6 +181,7 @@ function renderOverview() {
 }
 
 function renderLibrary() {
+  const libraryItems = state.data?.library || [];
   const section = createEl('div', 'card');
   section.appendChild(createEl('div', 'section-header', [createEl('h3', null, ['Video library']), createEl('span', 'muted', ['Processing + published assets'])]));
 
@@ -124,7 +196,7 @@ function renderLibrary() {
             <td>${item.title}</td>
             <td>${item.visibility}</td>
             <td><span class="badge ${item.status === 'Published' ? 'success' : 'warning'}">${item.status}</span></td>
-            <td>${item.views.toLocaleString()}</td>
+            <td>${(item.views || 0).toLocaleString()}</td>
             <td>${formatDate(item.updatedAt)}</td>
           </tr>`
         )
@@ -135,6 +207,7 @@ function renderLibrary() {
 }
 
 function renderBilling() {
+  const invoices = state.data?.invoices || [];
   const section = createEl('div', 'card');
   section.appendChild(createEl('div', 'section-header', [createEl('h3', null, ['Billing & invoices']), createPills(['Auto-pay enabled'])]));
 
@@ -160,9 +233,11 @@ function renderBilling() {
 }
 
 function renderSupport() {
+  const profile = state.data?.profile || {};
+  const supportTickets = state.data?.supportTickets || [];
   const section = createEl('div', 'grid');
   const cases = createEl('div', 'card');
-  cases.appendChild(createEl('div', 'section-header', [createEl('h3', null, ['Open cases']), createPills([clientProfile.supportLevel, 'SLA tracked'])]));
+  cases.appendChild(createEl('div', 'section-header', [createEl('h3', null, ['Open cases']), createPills([profile.supportLevel || 'Standard', 'SLA tracked'])]));
   const table = createEl('table', 'table');
   table.innerHTML = `
     <thead><tr><th>Case</th><th>Subject</th><th>Priority</th><th>Status</th><th>Opened</th><th>SLA</th></tr></thead>
@@ -184,7 +259,7 @@ function renderSupport() {
   cases.appendChild(table);
   section.appendChild(cases);
 
-  const cta = createEl('div', 'card');
+  const cta = createEl('div', 'card highlight');
   cta.appendChild(createEl('h3', null, ['Need faster help?']));
   cta.appendChild(createEl('p', 'muted', ['Reach your customer success manager or file a priority request for live incidents.']));
   cta.appendChild(createEl('div', 'pill-row', [createEl('span', 'pill', ['Escalation playbook']), createEl('span', 'pill', ['Incident room'])]));
@@ -207,7 +282,7 @@ function createPills(items) {
   return row;
 }
 
-function createTimeline() {
+function createTimeline(timeline = []) {
   const list = createEl('ul', 'list-stack');
   timeline.forEach((entry) => {
     const row = createEl('li', 'list-item', [
@@ -218,6 +293,3 @@ function createTimeline() {
   });
   return list;
 }
-
-window.addEventListener('hashchange', render);
-document.addEventListener('DOMContentLoaded', render);

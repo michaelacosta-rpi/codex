@@ -1,6 +1,6 @@
 # Codex Admin Portal
 
-A static, RBAC-aware admin SPA prototype built directly from the guidance in `docs/admin_spa_plan.md`. It ships with mocked data for users, roles, orders, sessions, feature flags, and audit logs to demonstrate the core flows described in the plan (navigation, impersonation, RBAC-aware buttons, and observability panels).
+A static, RBAC-aware admin SPA prototype built directly from the guidance in `docs/admin_spa_plan.md`. It includes curated data for users, roles, orders, sessions, feature flags, and audit logs to demonstrate the core flows described in the plan (navigation, impersonation, RBAC-aware buttons, and observability panels).
 
 ## Running locally
 
@@ -8,6 +8,15 @@ No build tooling is required. Serve the repository root with any static HTTP ser
 
 - **Admin portal**: `http://localhost:4173` (renders `index.html`).
 - **Client portal**: `http://localhost:4173/client.html` (renders the customer-facing experience built in `src/client.js`).
+
+The client portal reads live customer data from the configured client API origin (default `/api/client`) and expects JSON response
+s for:
+
+- `GET /profile`
+- `GET /library`
+- `GET /invoices`
+- `GET /support`
+- `GET /timeline`
 
 ## Running with Docker
 

@@ -317,6 +317,8 @@ function renderMediations() {
   }
   grid.appendChild(trackingCard);
 
+  grid.appendChild(renderMediationMetrics(mediations));
+
   const upcomingCard = createEl('div', 'card');
   upcomingCard.appendChild(
     createEl('div', 'section-header', [
@@ -398,6 +400,136 @@ function formatMediationStatus(mediation) {
   const rsvpStatus = total ? `${accepted}/${total} RSVP’d` : 'RSVP tracking active';
   const baseStatus = mediation.status || inviteStatus;
   return `${baseStatus} — ${rsvpStatus}`;
+}
+
+function renderMediationMetrics(mediations) {
+  const completed = mediations.filter((mediation) => mediation.timeframe !== 'upcoming');
+  const durations = completed
+    .map((mediation) => mediation.durationMinutes)
+    .filter((duration) => Number.isFinite(duration) && duration > 0);
+  const joinedCounts = completed
+    .map((mediation) => mediation.joinedCount ?? mediation.rsvp?.accepted ?? mediation.participants?.length ?? 0)
+    .filter((count) => Number.isFinite(count) && count > 0);
+  const settled = completed.filter(
+    (mediation) => mediation.settledInSession || mediation.outcome === 'Settled' || mediation.settlementConfirmed
+  );
+
+  const averageDuration = durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : 0;
+  const averageJoined = joinedCounts.length
+    ? Math.round(joinedCounts.reduce((sum, value) => sum + value, 0) / joinedCounts.length)
+    : 0;
+
+  const longest = completed.reduce(
+    (current, mediation) =>
+      Number.isFinite(mediation.durationMinutes) && mediation.durationMinutes > (current?.durationMinutes ?? -Infinity)
+        ? mediation
+        : current,
+    null
+  );
+  const shortest = completed.reduce(
+    (current, mediation) =>
+      Number.isFinite(mediation.durationMinutes) && mediation.durationMinutes < (current?.durationMinutes ?? Infinity)
+        ? mediation
+        : current,
+    null
+  );
+
+  const mostParties = completed.reduce(
+    (current, mediation) =>
+      (mediation.joinedCount ?? mediation.rsvp?.accepted ?? mediation.participants?.length ?? 0) >
+      (current?.joinedCount ?? current?.rsvp?.accepted ?? current?.participants?.length ?? -Infinity)
+        ? mediation
+        : current,
+    null
+  );
+
+  const leastParties = completed.reduce(
+    (current, mediation) =>
+      (mediation.joinedCount ?? mediation.rsvp?.accepted ?? mediation.participants?.length ?? Infinity) <
+      (current?.joinedCount ?? current?.rsvp?.accepted ?? current?.participants?.length ?? Infinity)
+        ? mediation
+        : current,
+    null
+  );
+
+  const settledPercent = completed.length ? Math.round((settled.length / completed.length) * 100) : 0;
+
+  const card = createEl('div', 'card');
+  card.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Mediation metrics']),
+      createEl('span', 'badge', ['Privacy-first aggregates'])
+    ])
+  );
+  card.appendChild(
+    createEl('p', 'muted', [
+      'Aggregate trends only; case names and attendee counts are shown for transparency. Settlement terms are never collected or displayed.'
+    ])
+  );
+
+  const metricGrid = createEl('div', 'grid');
+  metricGrid.appendChild(
+    createMetricStat('Average mediation length', averageDuration ? formatDurationMinutes(averageDuration) : '—', 'Based on completed sessions')
+  );
+  metricGrid.appendChild(
+    createMetricStat(
+      'Longest mediation',
+      longest?.durationMinutes ? formatDurationMinutes(longest.durationMinutes) : '—',
+      longest ? `${longest.name} · ${displayAttendees(longest)}` : 'No completed mediations yet'
+    )
+  );
+  metricGrid.appendChild(
+    createMetricStat(
+      'Shortest mediation',
+      shortest?.durationMinutes ? formatDurationMinutes(shortest.durationMinutes) : '—',
+      shortest ? `${shortest.name} · ${displayAttendees(shortest)}` : 'No completed mediations yet'
+    )
+  );
+  metricGrid.appendChild(
+    createMetricStat('Average parties joined', averageJoined ? `${averageJoined}` : '—', 'Calculated per completed mediation')
+  );
+  metricGrid.appendChild(
+    createMetricStat(
+      'Most parties joined',
+      mostParties ? `${mostParties.joinedCount ?? mostParties.rsvp?.accepted ?? mostParties.participants?.length ?? '—'}` : '—',
+      mostParties ? `${mostParties.name} · ${displayAttendees(mostParties)}` : 'Awaiting attendance data'
+    )
+  );
+  metricGrid.appendChild(
+    createMetricStat(
+      'Least parties joined',
+      leastParties ? `${leastParties.joinedCount ?? leastParties.rsvp?.accepted ?? leastParties.participants?.length ?? '—'}` : '—',
+      leastParties ? `${leastParties.name} · ${displayAttendees(leastParties)}` : 'Awaiting attendance data'
+    )
+  );
+  metricGrid.appendChild(
+    createMetricStat(
+      'Settled mediations',
+      `${settledPercent}%`,
+      completed.length ? `${settled.length} of ${completed.length} completed mediations` : 'No completed mediations yet'
+    )
+  );
+
+  card.appendChild(metricGrid);
+  return card;
+}
+
+function createMetricStat(title, value, detail) {
+  return createEl('div', 'stack', [createEl('strong', null, [title]), createEl('div', 'value', [value]), createEl('div', 'muted small', [detail])]);
+}
+
+function formatDurationMinutes(minutes) {
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (!hrs) return `${mins} min`;
+  if (!mins) return `${hrs} hr${hrs > 1 ? 's' : ''}`;
+  return `${hrs} hr${hrs > 1 ? 's' : ''} ${mins} min`;
+}
+
+function displayAttendees(mediation) {
+  const attendees = mediation.participants || [];
+  if (!attendees.length) return 'Attendee list unavailable';
+  return attendees.join(', ');
 }
 
 function renderOutcomeSelector(mediation) {

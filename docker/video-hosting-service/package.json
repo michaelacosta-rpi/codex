@@ -1,0 +1,10 @@
+{
+  "name": "codex-video-hosting-service",
+  "version": "1.0.0",
+  "description": "Purpose-built video meeting host for mediation demos",
+  "main": "server.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

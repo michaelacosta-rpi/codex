@@ -4,6 +4,7 @@ WORKDIR /usr/share/nginx/html
 
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY index.html ./
+COPY client.html ./
 COPY runtime-config.js ./
 COPY src ./src
 COPY docs ./docs

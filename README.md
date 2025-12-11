@@ -19,10 +19,11 @@ The client portal reads live customer data from the configured client API origin
 
 ## Running with Docker
 
-The portal can be deployed as a four-container stack to mirror the broader system:
+The portal can be deployed as a five-container stack to mirror the broader system:
 
 - **Admin**: a static SPA served by nginx (this repository).
 - **Client**: a companion SPA using the same base image.
+- **Client API**: mock JSON API for the client portal (`/api/client/*`).
 - **Video hosting service**: placeholder HTTP service representing the media backend.
 - **Database**: PostgreSQL for development data.
 
@@ -35,9 +36,9 @@ docker run -p 4173:80 -e ADMIN_PORTAL_ORIGIN=http://admin codex-admin-portal
 
 `ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA will reference for admin communication (defaults to `http://admin:4173`).
 
-### Compose the four-container stack
+### Compose the stack
 
-An example `docker-compose.yml` is included to run all four services together:
+An example `docker-compose.yml` is included to run all services together:
 
 ```
 docker compose up --build
@@ -47,6 +48,7 @@ The compose file exposes:
 
 - Admin SPA at `http://localhost:4173`.
 - Client SPA at `http://localhost:4174`.
+- Client API at `http://localhost:4176/api/client`.
 - Video hosting service placeholder at `http://localhost:4175`.
 - PostgreSQL database on port `5432` with default credentials for local development.
 

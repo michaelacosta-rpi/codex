@@ -10,18 +10,30 @@ services:
     ports:
       - "4173:80"
     depends_on:
+      - client-api
       - video-hosting-service
       - database
 
   client:
-    image: nginx:1.27-alpine
+    image: codex-admin-spa:latest
     container_name: codex-client-spa
+    environment:
+      CLIENT_API_ORIGIN: /api/client
+      ADMIN_PORTAL_ORIGIN: http://admin
     volumes:
-      - ./docs:/usr/share/nginx/html:ro
+      - ./docker/nginx.client.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "4174:80"
     depends_on:
+      - client-api
       - admin
+
+  client-api:
+    build: ./docker/client-api
+    image: codex-client-api:latest
+    container_name: codex-client-api
+    ports:
+      - "4176:8080"
 
   video-hosting-service:
     image: nginx:1.27-alpine

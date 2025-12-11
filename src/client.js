@@ -10,6 +10,9 @@ const routes = [
   { path: 'support', label: 'Support' }
 ];
 
+const optionalRoles = ['Carrier', 'Counsel', 'Defendant', 'Plaintiff'];
+const partySides = ['Plaintiff', 'Defendant'];
+
 const state = {
   loading: true,
   error: null,
@@ -30,7 +33,14 @@ const state = {
     coMediatorName: '',
     coMediatorEmail: '',
     coMediatorNotes: '',
-    coMediatorError: null
+    coMediatorError: null,
+    invitationEmail: '',
+    invitationSide: 'Plaintiff',
+    invitationRole: '',
+    invitationError: null,
+    invitationStatus: null,
+    pendingInvites: [],
+    guestRole: ''
   }
 };
 
@@ -70,7 +80,14 @@ async function hydrate() {
         coMediatorName: '',
         coMediatorEmail: '',
         coMediatorNotes: '',
-        coMediatorError: null
+        coMediatorError: null,
+        invitationEmail: '',
+        invitationSide: 'Plaintiff',
+        invitationRole: '',
+        invitationError: null,
+        invitationStatus: null,
+        pendingInvites: [],
+        guestRole: ''
       };
     }
   } catch (err) {
@@ -375,6 +392,7 @@ function renderVideoPortal() {
     createEl('div', 'link-row', [createEl('code', null, [session.joinLink || 'https://video.codex.local/join']), createEl('span', 'pill', ['Shareable'])])
   ]);
   schedulingCard.appendChild(joinLink);
+  schedulingCard.appendChild(renderInvitationComposer());
 
   const verificationCard = createEl('div', 'card');
   verificationCard.appendChild(
@@ -480,6 +498,188 @@ function renderVideoPortal() {
   layout.appendChild(renderMeetingAdminCard(editable));
   layout.appendChild(mediatorCard);
   return layout;
+}
+
+function renderInvitationComposer() {
+  const card = createEl('div', 'invitation-composer');
+  card.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h4', null, ['Invitations & party tags']),
+      createEl('span', 'badge success', ['Plaintiff/defendant required'])
+    ])
+  );
+
+  card.appendChild(
+    createEl('p', 'muted', [
+      'Enter email addresses to send invitations while scheduling. Tag each recipient as plaintiff or defendant. Roles such as carrier or counsel are optional now and can be refined later when participants join the video portal.'
+    ])
+  );
+
+  const formRow = createEl('div', 'invitation-row');
+
+  const emailInput = createEl('input');
+  emailInput.type = 'email';
+  emailInput.placeholder = 'Participant email (required)';
+  emailInput.value = state.videoUi.invitationEmail;
+  emailInput.oninput = (e) => updateInvitationField('invitationEmail', e.target.value);
+
+  const sideSelect = createEl('select');
+  partySides.forEach((side) => {
+    const opt = createEl('option');
+    opt.value = side;
+    opt.textContent = side;
+    sideSelect.appendChild(opt);
+  });
+  sideSelect.value = state.videoUi.invitationSide || partySides[0];
+  sideSelect.onchange = (e) => updateInvitationField('invitationSide', e.target.value);
+
+  const roleSelect = createEl('select');
+  const placeholder = createEl('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Role (optional)';
+  roleSelect.appendChild(placeholder);
+  optionalRoles.forEach((role) => {
+    const opt = createEl('option');
+    opt.value = role;
+    opt.textContent = role;
+    roleSelect.appendChild(opt);
+  });
+  roleSelect.value = state.videoUi.invitationRole;
+  roleSelect.onchange = (e) => updateInvitationField('invitationRole', e.target.value);
+
+  const addButton = createEl('button', 'button primary', ['Add invite']);
+  addButton.onclick = addInvitation;
+
+  formRow.appendChild(emailInput);
+  formRow.appendChild(sideSelect);
+  formRow.appendChild(roleSelect);
+  formRow.appendChild(addButton);
+  card.appendChild(formRow);
+
+  const helper = createEl('div', 'muted small', [
+    'Plaintiff/defendant tagging is required for every invitation. Roles help the mediator prepare but stay optional until participants join.'
+  ]);
+  card.appendChild(helper);
+
+  card.appendChild(renderInvitationList());
+
+  if (state.videoUi.invitationError) {
+    card.appendChild(createEl('div', 'notice warning', [state.videoUi.invitationError]));
+  }
+  if (state.videoUi.invitationStatus) {
+    card.appendChild(createEl('div', 'notice success', [state.videoUi.invitationStatus]));
+  }
+
+  return card;
+}
+
+function renderInvitationList() {
+  const container = createEl('div', 'invitation-list');
+  if (!state.videoUi.pendingInvites.length) {
+    container.appendChild(
+      createEl('div', 'notice muted', ['No invitations queued. Add emails to send invites with the required plaintiff/defendant tag.'])
+    );
+    return container;
+  }
+
+  const table = createEl('table', 'table');
+  table.innerHTML = `
+    <thead><tr><th>Email</th><th>Party</th><th>Role (optional)</th><th></th></tr></thead>
+    <tbody>
+      ${state.videoUi.pendingInvites
+        .map(
+          (invite) => `
+            <tr>
+              <td>${invite.email}</td>
+              <td><span class="pill">${invite.side}</span></td>
+              <td>${invite.role || 'Not set'}</td>
+              <td><button class="button ghost" data-id="${invite.id}">Remove</button></td>
+            </tr>`
+        )
+        .join('')}
+    </tbody>
+  `;
+
+  container.appendChild(table);
+
+  table.querySelectorAll('button[data-id]').forEach((btn) => {
+    btn.onclick = () => removeInvitation(btn.dataset.id);
+  });
+
+  const sendRow = createEl('div', 'row');
+  const sendButton = createEl('button', 'button outline', [`Send ${state.videoUi.pendingInvites.length} invitation(s)`]);
+  sendButton.onclick = sendInvitations;
+  sendRow.appendChild(sendButton);
+  sendRow.appendChild(createEl('span', 'muted small', ['Emails will include the plaintiff/defendant tag for clarity.']));
+  container.appendChild(sendRow);
+
+  return container;
+}
+
+function updateInvitationField(key, value) {
+  state.videoUi = { ...state.videoUi, [key]: value, invitationError: null, invitationStatus: null };
+  render();
+}
+
+function addInvitation() {
+  const email = (state.videoUi.invitationEmail || '').trim();
+  const side = (state.videoUi.invitationSide || '').trim();
+  const role = (state.videoUi.invitationRole || '').trim();
+
+  if (!email || !validateEmail(email)) {
+    updateInvitationField('invitationError', 'A valid email address is required to send an invitation.');
+    return;
+  }
+
+  if (!side) {
+    updateInvitationField('invitationError', 'Every invitation must be tagged as plaintiff or defendant.');
+    return;
+  }
+
+  const invite = {
+    id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    email,
+    side,
+    role
+  };
+
+  state.videoUi = {
+    ...state.videoUi,
+    pendingInvites: [...state.videoUi.pendingInvites, invite],
+    invitationEmail: '',
+    invitationRole: '',
+    invitationStatus: null,
+    invitationError: null
+  };
+
+  render();
+}
+
+function removeInvitation(id) {
+  state.videoUi = {
+    ...state.videoUi,
+    pendingInvites: state.videoUi.pendingInvites.filter((invite) => invite.id !== id),
+    invitationStatus: null
+  };
+  render();
+}
+
+function sendInvitations() {
+  if (!state.videoUi.pendingInvites.length) {
+    updateInvitationField('invitationError', 'Add at least one email to send invitations.');
+    return;
+  }
+
+  state.videoUi = {
+    ...state.videoUi,
+    invitationStatus: `Invitations ready to send for ${state.videoUi.pendingInvites.length} recipient(s). Plaintiff/defendant tags will be included.`,
+    invitationError: null
+  };
+  render();
+}
+
+function validateEmail(value) {
+  return /.+@.+\..+/.test(value);
 }
 
 function renderMeetingAdminCard(editable) {
@@ -609,6 +809,7 @@ function addCoMediator() {
 function handleGuestJoin(session) {
   const name = (state.videoUi.guestName || '').trim();
   const side = (state.videoUi.guestSide || '').trim();
+  const role = (state.videoUi.guestRole || '').trim();
   const verified = state.videoUi.verifiedGuests.includes(name);
   if (!name || !side) {
     updateVideoSetting('guestError', 'Name and side selection are required.');
@@ -631,7 +832,7 @@ function handleGuestJoin(session) {
     return;
   }
 
-  const entry = createWaitingEntry({ name, side });
+  const entry = createWaitingEntry({ name, side, role });
   entries.push(entry);
 
   state.videoUi = {
@@ -639,7 +840,8 @@ function handleGuestJoin(session) {
     guestError: null,
     attemptsByGuest: nextAttempts,
     waitingEntries: entries,
-    remindVideoOn: true
+    remindVideoOn: true,
+    guestRole: ''
   };
   render();
 }
@@ -665,6 +867,12 @@ function pruneWaitingEntries() {
   }
 }
 
+function updateWaitingEntryRole(id, role) {
+  const entries = state.videoUi.waitingEntries.map((entry) => (entry.id === id ? { ...entry, role } : entry));
+  state.videoUi = { ...state.videoUi, waitingEntries: entries };
+  render();
+}
+
 function groupWaitingBySide(sides = []) {
   const map = new Map();
   sides.forEach((side) => map.set(side.label, { side, entries: [] }));
@@ -682,15 +890,18 @@ function normalizeWaitingEntries(sides = []) {
     const guests = Array.isArray(side.waitingGuests)
       ? side.waitingGuests
       : Array.from({ length: side.waitingGuests || 0 }, (_, i) => ({ name: `Guest ${i + 1}`, side: side.label }));
-    return guests.map((guest) => createWaitingEntry({ name: guest.name || 'Guest', side: side.label, expiresAt: now + 5 * 60 * 1000 }));
+    return guests.map((guest) =>
+      createWaitingEntry({ name: guest.name || 'Guest', side: side.label, role: guest.role, expiresAt: now + 5 * 60 * 1000 })
+    );
   });
 }
 
-function createWaitingEntry({ name, side, expiresAt }) {
+function createWaitingEntry({ name, side, expiresAt, role }) {
   return {
     id: `wait-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     name,
     side,
+    role: role || '',
     expiresAt: expiresAt || Date.now() + 5 * 60 * 1000,
     status: 'waiting'
   };
@@ -722,13 +933,27 @@ function renderGuestForm(session) {
     updateVideoSetting('guestError', null);
   };
 
+  const roleSelect = createEl('select');
+  const rolePlaceholder = createEl('option');
+  rolePlaceholder.value = '';
+  rolePlaceholder.textContent = 'Role (optional)';
+  roleSelect.appendChild(rolePlaceholder);
+  optionalRoles.forEach((role) => {
+    const option = createEl('option');
+    option.value = role;
+    option.textContent = role;
+    roleSelect.appendChild(option);
+  });
+  roleSelect.value = state.videoUi.guestRole || '';
+  roleSelect.onchange = (e) => updateVideoSetting('guestRole', e.target.value);
+
   const attemptCount = state.videoUi.attemptsByGuest[state.videoUi.guestName || ''] || 0;
   const verifiedAlready = state.videoUi.verifiedGuests.includes(state.videoUi.guestName?.trim());
   const authRequired = (session.accessPolicy || state.videoUi.accessPolicy) !== 'open';
   const helper = createEl('div', 'muted', [
     `${authRequired ? 'Authentication required; unauth guests go to side-specific waiting room.' : 'Open link; side selection still requested for tracking.'} Attempts: ${attemptCount}/3. ${
       verifiedAlready ? 'Verified guest may rejoin directly.' : 'Guests removed if not admitted within 5 minutes.'
-    }`
+    } Optional role can be set now or assigned by the mediator after admission.`
   ]);
 
   const preview = createEl('div', 'preview');
@@ -754,6 +979,7 @@ function renderGuestForm(session) {
 
   row.appendChild(nameInput);
   row.appendChild(sideSelect);
+  row.appendChild(roleSelect);
   row.appendChild(submit);
   form.appendChild(row);
   form.appendChild(helper);
@@ -796,13 +1022,32 @@ function renderWaitingRoom(session) {
         createEl('div', 'avatar', [entry.name?.[0] || '?']),
         createEl('div', 'stack', [
           createEl('strong', null, [entry.name || 'Guest']),
-          createEl('span', 'muted', [entry.status === 'admitted' ? 'Verified & can rejoin' : 'Waiting for side approval'])
+          createEl('span', 'muted', [entry.status === 'admitted' ? 'Verified & can rejoin' : 'Waiting for side approval']),
+          createEl('div', 'pill-row', [
+            createEl('span', 'pill soft', [entry.side || 'Side not set']),
+            createEl('span', 'pill', [entry.role || 'Role optional'])
+          ])
         ])
       ]);
       const actions = createEl('div', 'row');
+      const roleSelect = createEl('select');
+      const roleOption = createEl('option');
+      roleOption.value = '';
+      roleOption.textContent = 'Set role (optional)';
+      roleSelect.appendChild(roleOption);
+      optionalRoles.forEach((role) => {
+        const option = createEl('option');
+        option.value = role;
+        option.textContent = role;
+        roleSelect.appendChild(option);
+      });
+      roleSelect.value = entry.role || '';
+      roleSelect.onchange = (e) => updateWaitingEntryRole(entry.id, e.target.value);
+
       const admit = createEl('button', 'button outline', ['Admit']);
       admit.disabled = entry.status === 'admitted';
       admit.onclick = () => admitGuest(entry.id);
+      actions.appendChild(roleSelect);
       actions.appendChild(admit);
       guestStack.appendChild(createEl('div', 'waiting-guest', [preview, badge, actions]));
     });

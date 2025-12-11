@@ -17,7 +17,8 @@ export const roles = [
       'feature:view',
       'feature:toggle',
       'audit:view',
-      'audit:export'
+      'audit:export',
+      'sso:manage'
     ]
   },
   {
@@ -193,5 +194,90 @@ export const loginEvents = [
     result: 'success',
     occurredAt: '2025-02-10T18:22:00Z',
     ip: '172.16.0.14'
+  }
+];
+
+export const ssoConnections = [
+  {
+    id: 'sso-1',
+    orgId: 'org-northwind',
+    orgName: 'Northwind Mediation',
+    orgKey: 'northwind',
+    protocol: 'OIDC',
+    provider: 'Okta',
+    providerKey: 'okta',
+    displayName: 'Northwind Okta',
+    status: 'Published',
+    enforcement: 'Required',
+    policy: {
+      allowLocalFallback: false,
+      jitProvisioning: true,
+      allowedGroups: ['Mediators', 'Paralegals'],
+      sessionTtlMinutes: 60,
+      refreshTtlMinutes: 1440,
+      mfaRequirement: 'Honor IdP MFA context',
+      clockSkewSeconds: 120
+    },
+    authUrl: 'https://northwind.okta.com/oauth2/default/v1/authorize',
+    tokenUrl: 'https://northwind.okta.com/oauth2/default/v1/token',
+    metadataUrl: 'https://northwind.okta.com/oauth2/default/.well-known/openid-configuration',
+    audience: 'api://client-portal',
+    clientId: 'okta-northwind-client',
+    redirectUrls: ['https://client.vmh.io/auth/sso/northwind/callback'],
+    attributeMap: { email: 'email', name: 'name', role: 'groups' },
+    domains: [
+      { domain: 'northwindmediators.com', verifiedAt: '2025-02-06T12:00:00Z' },
+      { domain: 'northwind-vmh.com', verifiedAt: '2025-02-06T12:00:00Z' }
+    ],
+    branding: { buttonText: 'Continue with Northwind SSO' },
+    lastTestedAt: '2025-02-11T08:45:00Z',
+    version: 4,
+    health: {
+      lastSuccess: '2025-02-11T09:12:00Z',
+      lastFailure: '2025-02-11T06:18:00Z',
+      errorCode: 'clock_skew_detected',
+      metadataExpiry: '2025-03-14T00:00:00Z'
+    }
+  },
+  {
+    id: 'sso-2',
+    orgId: 'org-beacon',
+    orgName: 'Beacon Family Group',
+    orgKey: 'beacon',
+    protocol: 'SAML',
+    provider: 'AzureAD',
+    providerKey: 'azuread',
+    displayName: 'Beacon AzureAD',
+    status: 'Pilot',
+    enforcement: 'Optional',
+    policy: {
+      allowLocalFallback: true,
+      jitProvisioning: false,
+      allowedGroups: ['Mediation Team'],
+      sessionTtlMinutes: 90,
+      refreshTtlMinutes: 2160,
+      mfaRequirement: 'Require when IdP not asserted',
+      clockSkewSeconds: 60
+    },
+    metadataUrl: 'https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml',
+    audience: 'urn:vmh:client-portal',
+    certificate: '-----BEGIN CERTIFICATE-----...-----END CERTIFICATE-----',
+    redirectUrls: [
+      'https://client.vmh.io/auth/sso/beacon/callback',
+      'https://staging-client.vmh.io/auth/sso/beacon/callback'
+    ],
+    attributeMap: { email: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress', name: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name', role: 'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups' },
+    domains: [
+      { domain: 'beaconfamily.org', verifiedAt: '2025-02-05T10:00:00Z' }
+    ],
+    branding: { buttonText: 'Sign in with Beacon SSO' },
+    lastTestedAt: '2025-02-10T15:20:00Z',
+    version: 2,
+    health: {
+      lastSuccess: '2025-02-11T07:55:00Z',
+      lastFailure: null,
+      errorCode: null,
+      metadataExpiry: '2025-04-01T00:00:00Z'
+    }
   }
 ];

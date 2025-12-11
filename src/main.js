@@ -1,4 +1,4 @@
-import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents } from './data/referenceData.js';
+import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents, ssoConnections } from './data/referenceData.js';
 import { formatMoney, formatDate, createEl } from './components/utils.js';
 import { adminPortalOrigin } from './config.js';
 import { initTelemetry, logEvent, recordMetric } from './telemetry.js';
@@ -10,6 +10,7 @@ const routes = [
   { path: 'orders', label: 'Orders', icon: '🧾', permissions: ['sales:view'] },
   { path: 'sessions', label: 'Sessions', icon: '🔒', permissions: ['session:view'] },
   { path: 'flags', label: 'Feature Flags', icon: '🚩', permissions: ['feature:view'] },
+  { path: 'sso', label: 'SSO', icon: '🔐', permissions: ['sso:manage'] },
   { path: 'audit', label: 'Audit Logs', icon: '📜', permissions: ['audit:view'] }
 ];
 
@@ -119,6 +120,9 @@ function renderMain() {
       break;
     case 'flags':
       content.appendChild(renderFlags());
+      break;
+    case 'sso':
+      content.appendChild(renderSso());
       break;
     case 'audit':
       content.appendChild(renderAudit());
@@ -354,6 +358,157 @@ function renderFlags() {
         .join('')}
     </tbody>`;
   section.appendChild(table);
+  return section;
+}
+
+function renderSso() {
+  const section = createEl('div', 'stack');
+  section.appendChild(createEl('h2', null, ['Single Sign-On']));
+  section.appendChild(
+    createEl('div', 'row', [
+      createEl('span', 'pill', ['OIDC + SAML connectors']),
+      createEl('span', 'pill', ['Email discovery + org selector']),
+      createEl('span', 'pill', ['Test sign-in, publish, rollback'])
+    ])
+  );
+
+  const enforcementCounts = ssoConnections.reduce((acc, { enforcement }) => {
+    acc[enforcement] = (acc[enforcement] || 0) + 1;
+    return acc;
+  }, {});
+
+  const summary = createEl('div', 'content-grid');
+  summary.appendChild(
+    createEl('div', 'card stack', [
+      createEl('div', 'row', [createEl('h3', null, ['Connections']), createEl('span', 'badge success', [`${ssoConnections.length} active`])]),
+      createEl('p', 'muted', ['Per-organization SSO connectors with provider presets and versioned configuration.'])
+    ])
+  );
+  summary.appendChild(
+    createEl('div', 'card stack', [
+      createEl('div', 'row', [createEl('h3', null, ['Enforcement']), createEl('span', 'badge warning', ['Policy grid'])]),
+      createEl('div', 'stack',
+        Object.entries(enforcementCounts).map(([mode, count]) =>
+          createEl('div', 'row', [createEl('strong', null, [mode]), createEl('span', 'muted', [`${count} org${count > 1 ? 's' : ''}`])])
+        )
+      ),
+      createEl('p', 'muted', ['Required hides local login, Optional allows fallback, Pilot rolls out to selected groups.'])
+    ])
+  );
+  summary.appendChild(
+    createEl('div', 'card stack', [
+      createEl('div', 'row', [createEl('h3', null, ['Health']), createEl('span', 'chip soft', ['Telemetry'])]),
+      createEl('p', 'muted', ['Metadata refresh cadence, last assertion outcome, and IdP error codes for support triage.']),
+      createEl('div', 'row', [
+        createEl('span', 'pill', ['Alert: metadata expiry < 7d']),
+        createEl('span', 'pill', ['Rate-limit failed assertions']),
+        createEl('span', 'pill', ['Clock skew tolerance configured'])
+      ])
+    ])
+  );
+
+  section.appendChild(summary);
+
+  const connectionTable = createEl('table', 'table');
+  connectionTable.innerHTML = `
+    <thead><tr><th>Org</th><th>Protocol</th><th>Enforcement</th><th>Policy</th><th>Health</th><th>Version</th></tr></thead>
+    <tbody>
+      ${ssoConnections
+        .map(
+          (c) => `
+        <tr>
+          <td>${c.orgName}<div class="muted">${c.provider} preset</div></td>
+          <td>${c.protocol} · ${c.providerKey}</td>
+          <td><span class="badge ${c.enforcement === 'Required' ? 'danger' : 'warning'}">${c.enforcement}</span></td>
+          <td>${c.policy.allowLocalFallback ? 'Fallback allowed' : 'SSO only'} · JIT ${c.policy.jitProvisioning ? 'on' : 'off'} · Groups: ${c.policy.allowedGroups.join(', ')}</td>
+          <td>${c.health.lastSuccess ? `Last success ${formatDate(c.health.lastSuccess)}` : 'No success yet'}<div class="muted">Metadata expires ${formatDate(c.health.metadataExpiry)}</div></td>
+          <td>v${c.version}</td>
+        </tr>`
+        )
+        .join('')}
+    </tbody>`;
+  section.appendChild(createEl('div', 'card', [createEl('div', 'section-header', [createEl('h3', null, ['Connections & policies'])]), connectionTable]));
+
+  const domainRows = ssoConnections.flatMap((c) =>
+    c.domains.map((d) => ({ ...d, orgName: c.orgName, enforcement: c.enforcement, buttonText: c.branding?.buttonText || 'Sign in with SSO' }))
+  );
+  const domainTable = createEl('table', 'table');
+  domainTable.innerHTML = `
+    <thead><tr><th>Domain</th><th>Org</th><th>Verified</th><th>Enforcement</th><th>Branding</th></tr></thead>
+    <tbody>
+      ${domainRows
+        .map(
+          (d) => `
+        <tr>
+          <td>${d.domain}</td>
+          <td>${d.orgName}</td>
+          <td>${formatDate(d.verifiedAt)}</td>
+          <td>${d.enforcement}</td>
+          <td>${d.buttonText}</td>
+        </tr>`
+        )
+        .join('')}
+    </tbody>`;
+  section.appendChild(createEl('div', 'card', [createEl('div', 'section-header', [createEl('h3', null, ['Domain discovery & branding'])]), domainTable]));
+
+  const detailGrid = createEl('div', 'grid-2');
+  ssoConnections.forEach((c) => {
+    const actions = createEl('div', 'table-actions');
+    const statusClass = c.status === 'Published' ? 'success' : c.status === 'Pilot' ? 'warning' : 'danger';
+    const test = createEl('button', 'button', ['Test sign-in']);
+    test.onclick = () => {
+      logEvent('sso.test', { connectionId: c.id, orgKey: c.orgKey, protocol: c.protocol });
+      recordMetric('sso.test', 1, { org: c.orgKey });
+      alert('Sandbox assertion simulated. Capture trace + errors in real implementation.');
+    };
+    const publish = createEl('button', 'button primary', ['Publish']);
+    publish.onclick = () => {
+      logEvent('sso.publish', { connectionId: c.id, version: c.version });
+      recordMetric('sso.publish', 1, { org: c.orgKey });
+      alert('Version would be promoted and audit logged.');
+    };
+    const rollback = createEl('button', 'button danger', ['Rollback']);
+    rollback.onclick = () => {
+      logEvent('sso.rollback', { connectionId: c.id, version: c.version });
+      recordMetric('sso.rollback', 1, { org: c.orgKey });
+      alert('Restore prior connection version and disable misconfigured rollout.');
+    };
+    actions.appendChild(test);
+    actions.appendChild(publish);
+    actions.appendChild(rollback);
+
+    const card = createEl('div', 'card stack');
+    card.appendChild(createEl('div', 'row', [createEl('h3', null, [c.displayName]), createEl('span', `badge ${statusClass}`, [c.status])])) ;
+    card.appendChild(createEl('div', 'muted', [`${c.protocol} connector with ${c.provider} preset and redirect(s) ${c.redirectUrls.join(', ')}`]));
+    card.appendChild(
+      createEl('div', 'tag-list', [
+        createEl('span', 'tag', [`Audience: ${c.audience}`]),
+        createEl('span', 'tag', [`Client ID: ${c.clientId || 'certificate based'}`]),
+        createEl('span', 'tag', [`Metadata: ${c.metadataUrl ? 'auto-refresh' : 'manual'}`])
+      ])
+    );
+    card.appendChild(
+      createEl('div', 'stack', [
+        createEl('strong', null, ['Attribute mapping']),
+        createEl('div', 'muted', [`Email → ${c.attributeMap.email}`]),
+        createEl('div', 'muted', [`Name → ${c.attributeMap.name}`]),
+        createEl('div', 'muted', [`Role/Groups → ${c.attributeMap.role}`])
+      ])
+    );
+    card.appendChild(
+      createEl('div', 'stack', [
+        createEl('strong', null, ['Policy & session controls']),
+        createEl('div', null, [`Session TTL: ${c.policy.sessionTtlMinutes}m · Refresh TTL: ${c.policy.refreshTtlMinutes}m`]),
+        createEl('div', null, [`MFA: ${c.policy.mfaRequirement} · Clock skew: ${c.policy.clockSkewSeconds}s`]),
+        createEl('div', null, [`Allowed groups: ${c.policy.allowedGroups.join(', ')}`]),
+        createEl('div', 'muted', [c.policy.allowLocalFallback ? 'Local login fallback available' : 'Local login hidden (Required mode)'])
+      ])
+    );
+    card.appendChild(actions);
+    detailGrid.appendChild(card);
+  });
+
+  section.appendChild(detailGrid);
   return section;
 }
 

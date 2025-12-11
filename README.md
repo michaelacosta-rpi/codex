@@ -30,7 +30,7 @@ The portal can be deployed as a five-container stack to mirror the broader syste
 - **Admin**: a static SPA served by nginx (this repository).
 - **Client**: a companion SPA using the same base image.
 - **Client API**: mock JSON API for the client portal (`/api/client/*`).
-- **Video hosting service**: placeholder HTTP service representing the media backend.
+- **Video hosting service**: purpose-built mediation video host with APIs for session lifecycle, invites, and join token issuance.
 - **Database**: PostgreSQL for development data.
 
 The admin and client portals now rely on the shared PostgreSQL instance for user identity data. The client API exposes helper endpoints so that users created from the admin side can immediately access the client portal when tagged for that surface.
@@ -57,11 +57,25 @@ The compose file exposes:
 - Admin SPA at `http://localhost:4173`.
 - Client SPA at `http://localhost:4174`.
 - Client API at `http://localhost:4176/api/client`.
-- Video hosting service placeholder at `http://localhost:4175`.
+- Video hosting service at `http://localhost:4175` with REST endpoints (health, status, session creation, invites, and token issuance).
 - PostgreSQL database on port `5432` with default credentials for local development.
 
-The client API reads `VIDEO_SERVICE_URL` (defaulting to `http://video-hosting-service`) so containerized health checks can
-validate that the mock video host is reachable from the API layer.
+The client API reads `VIDEO_SERVICE_URL` (defaulting to `http://video-hosting-service:8080`) so containerized health checks can
+validate that the video host is reachable from the API layer.
+
+### Video hosting service endpoints
+
+The dedicated video hosting container now runs a lightweight mediation-ready API (container port `8080`, exposed as `4175` on the host):
+
+- `GET /health` — uptime probe used by the client API system check.
+- `GET /status` — service metadata and session counts.
+- `GET /sessions` — list scheduled or active sessions (in-memory demo data seeded with `med-5001`).
+- `POST /sessions` — create a new mediation session with title, schedule, and access policy details.
+- `POST /sessions/:id/invite` — queue an invitation for a participant and append them to the appropriate side.
+- `POST /sessions/:id/join-token` — issue a one-time join URL for the participant.
+- `POST /sessions/:id/breakouts` — spin up breakout rooms tied to the mediation.
+
+`VIDEO_JOIN_BASE` controls the base used for generated join links (defaults to `https://video.codex.local/room`).
 
 ### Client API endpoints for shared users
 
@@ -70,7 +84,7 @@ validate that the mock video host is reachable from the API layer.
 - `GET /api/client/health` — confirms connectivity to the backing PostgreSQL instance.
 - `GET /api/client/system-check` — verifies both PostgreSQL connectivity and that the video hosting service is reachable from the API container.
 
-Replace the placeholder images for the video service and database with your production equivalents as needed.
+Replace the illustrative images for the video service and database with your production equivalents as needed.
 
 ## Notes
 - User impersonation in the sidebar immediately updates RBAC gates for navigation and page actions.

@@ -34,19 +34,20 @@ services:
     container_name: codex-client-api
     environment:
       DATABASE_URL: postgres://codex:codex@database:5432/codex
-      VIDEO_SERVICE_URL: http://video-hosting-service
+      VIDEO_SERVICE_URL: http://video-hosting-service:8080
     ports:
       - "4176:8080"
     depends_on:
       - database
 
   video-hosting-service:
-    image: nginx:1.27-alpine
+    build: ./docker/video-hosting-service
+    image: codex-video-hosting:latest
     container_name: codex-video-hosting
-    volumes:
-      - ./docker/video-hosting-service:/usr/share/nginx/html:ro
+    environment:
+      VIDEO_JOIN_BASE: https://video.codex.local/room
     ports:
-      - "4175:80"
+      - "4175:8080"
 
   database:
     image: postgres:16-alpine

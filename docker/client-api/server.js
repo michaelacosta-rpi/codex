@@ -19,7 +19,7 @@ const databaseUrl =
     process.env.DATABASE_HOST || 'database'
   }:${process.env.DATABASE_PORT || 5432}/${process.env.DATABASE_NAME || 'codex'}`;
 
-const videoServiceUrl = process.env.VIDEO_SERVICE_URL || 'http://video-hosting-service';
+const videoServiceUrl = process.env.VIDEO_SERVICE_URL || 'http://video-hosting-service:8080';
 
 const pool = new Pool({
   connectionString: databaseUrl,
@@ -166,6 +166,19 @@ const data = {
       verificationMethod: 'magic_link',
       cacheMinutes: 60,
       startedAt: null,
+      meetingAdmins: [
+        {
+          name: 'Jordan Ellis',
+          email: 'jordan.ellis@northwindmediators.com',
+          designation: 'Mediator host',
+          permissions: ['Admit/remove', 'Breakout control', 'Recording', 'Reset join tokens'],
+          addedBy: 'Case intake automation'
+        }
+      ],
+      breakoutRooms: [
+        { id: 'brk-100', name: 'Plaintiff caucus', participants: ['Dana Johnson', 'Leah Kim'], createdAt: Date.now() - 20 * 60 * 1000 },
+        { id: 'brk-101', name: 'Carrier caucus', participants: ['Chris Patel'], createdAt: Date.now() - 10 * 60 * 1000 }
+      ],
       sides: [
         {
           label: 'Policyholder side',
@@ -186,6 +199,27 @@ const data = {
   ]
 };
 
+const fetchVideoSessions = async () => {
+  const response = await fetch(`${videoServiceUrl}/sessions`, {
+    headers: { Accept: 'application/json' }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Video service returned status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const sessions = Array.isArray(payload.sessions) ? payload.sessions : payload;
+  if (!Array.isArray(sessions)) {
+    throw new Error('Video service response malformed');
+  }
+
+  return sessions.map((session) => ({
+    ...session,
+    joinLink: session.joinLink || `${videoServiceUrl}/room/${session.id}`
+  }));
+};
+
 const routes = {
   GET: {
     [`${basePath}/profile`]: () => ({ status: 200, body: data.profile }),
@@ -193,7 +227,15 @@ const routes = {
     [`${basePath}/invoices`]: () => ({ status: 200, body: data.invoices }),
     [`${basePath}/support`]: () => ({ status: 200, body: data.support }),
     [`${basePath}/timeline`]: () => ({ status: 200, body: data.timeline }),
-    [`${basePath}/video-sessions`]: () => ({ status: 200, body: data.videoSessions })
+    [`${basePath}/video-sessions`]: async () => {
+      try {
+        const sessions = await fetchVideoSessions();
+        return { status: 200, body: sessions };
+      } catch (error) {
+        console.warn('[client-api] falling back to local video sessions', error.message);
+        return { status: 200, body: data.videoSessions };
+      }
+    }
   }
 };
 
@@ -206,12 +248,12 @@ const findUserByEmail = async (email) => {
   return rows[0] || null;
 };
 
-const fetchWithTimeout = async (url, { timeoutMs = 3000 } = {}) => {
+const fetchWithTimeout = async (url, { timeoutMs = 3000, method = 'HEAD' } = {}) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    const response = await fetch(url, { method, signal: controller.signal });
     return { ok: response.ok, status: response.status };
   } catch (error) {
     return { ok: false, error: error.message };
@@ -302,7 +344,7 @@ const server = http.createServer(async (req, res) => {
       response.database = { status: 'degraded', error: 'database unreachable' };
     }
 
-    const videoProbe = await fetchWithTimeout(videoServiceUrl);
+    const videoProbe = await fetchWithTimeout(`${videoServiceUrl}/health`, { method: 'GET' });
     if (videoProbe.ok) {
       response.videoService = { status: 'ok', message: 'reachable', url: videoServiceUrl };
     } else {

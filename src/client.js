@@ -155,8 +155,8 @@ function renderHero() {
   const profile = state.data?.profile || {};
   const hero = createEl('div', 'client-hero');
   const meta = createEl('div', 'hero-meta', [
-    createEl('div', 'eyebrow', ['Client workspace']),
-    createEl('h1', null, [`${profile.company || 'Client'} Portal`]),
+    createEl('div', 'eyebrow', ['virtual mediation hosting']),
+    createEl('h1', null, [`${profile.company || 'Client'} workspace`]),
     createEl('div', 'muted', [`Primary contact: ${profile.contact || '—'} · ${profile.email || ''}`]),
     createEl('div', null, [`Customer success: ${profile.successManager || '—'}`])
   ]);

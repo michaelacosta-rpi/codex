@@ -49,7 +49,7 @@ function render() {
 
 function renderSidebar() {
   const sidebar = createEl('aside', 'sidebar');
-  const brand = createEl('div', 'brand', ['Codex Admin', createEl('span', 'chip', ['RBAC'])]);
+  const brand = createEl('div', 'brand', ['virtual mediation hosting', createEl('span', 'chip', ['admin'])]);
   sidebar.appendChild(brand);
 
   const nav = createEl('div', 'nav-section');
@@ -152,7 +152,7 @@ function renderUserMenu() {
 
 function renderDashboard() {
   const wrapper = createEl('div', 'stack');
-  wrapper.appendChild(createEl('h2', null, ['Control Center']));
+  wrapper.appendChild(createEl('h2', null, ['Mediation control center']));
   wrapper.appendChild(
     createEl('div', 'content-grid', [
       createMetric('Users', `${users.length} accounts`, 'MFA, status, roles'),

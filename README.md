@@ -54,11 +54,15 @@ The compose file exposes:
 - Video hosting service placeholder at `http://localhost:4175`.
 - PostgreSQL database on port `5432` with default credentials for local development.
 
+The client API reads `VIDEO_SERVICE_URL` (defaulting to `http://video-hosting-service`) so containerized health checks can
+validate that the mock video host is reachable from the API layer.
+
 ### Client API endpoints for shared users
 
 - `POST /api/client/users` — create or update a user record with `email`, `name`, and a `portals` array (e.g., `['admin', 'client']`).
 - `POST /api/client/login` — validate that a user exists and has `client` access; returns the portals attached to the account.
 - `GET /api/client/health` — confirms connectivity to the backing PostgreSQL instance.
+- `GET /api/client/system-check` — verifies both PostgreSQL connectivity and that the video hosting service is reachable from the API container.
 
 Replace the placeholder images for the video service and database with your production equivalents as needed.
 

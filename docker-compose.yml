@@ -34,6 +34,7 @@ services:
     container_name: codex-client-api
     environment:
       DATABASE_URL: postgres://codex:codex@database:5432/codex
+      VIDEO_SERVICE_URL: http://video-hosting-service
     ports:
       - "4176:8080"
     depends_on:

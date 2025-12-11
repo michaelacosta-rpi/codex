@@ -19,6 +19,8 @@ const databaseUrl =
     process.env.DATABASE_HOST || 'database'
   }:${process.env.DATABASE_PORT || 5432}/${process.env.DATABASE_NAME || 'codex'}`;
 
+const videoServiceUrl = process.env.VIDEO_SERVICE_URL || 'http://video-hosting-service';
+
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 5,
@@ -204,6 +206,20 @@ const findUserByEmail = async (email) => {
   return rows[0] || null;
 };
 
+const fetchWithTimeout = async (url, { timeoutMs = 3000 } = {}) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+    return { ok: response.ok, status: response.status };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 const createOrUpdateUser = async ({ email, name, portals }) => {
   if (!email || !name) {
     throw new Error('Both email and name are required');
@@ -269,6 +285,36 @@ const server = http.createServer(async (req, res) => {
       console.error('[client-api] health check failed', error.message);
       json(res, 503, { status: 'degraded', error: 'database unreachable' });
     }
+    return;
+  }
+
+  if (method === 'GET' && pathname === `${basePath}/system-check`) {
+    const response = {
+      database: { status: 'unknown' },
+      videoService: { status: 'unknown', url: videoServiceUrl }
+    };
+
+    try {
+      await pool.query('SELECT 1;');
+      response.database = { status: 'ok', message: 'connected' };
+    } catch (error) {
+      console.error('[client-api] system-check database failure', error.message);
+      response.database = { status: 'degraded', error: 'database unreachable' };
+    }
+
+    const videoProbe = await fetchWithTimeout(videoServiceUrl);
+    if (videoProbe.ok) {
+      response.videoService = { status: 'ok', message: 'reachable', url: videoServiceUrl };
+    } else {
+      response.videoService = {
+        status: 'unreachable',
+        url: videoServiceUrl,
+        error: videoProbe.error || `status ${videoProbe.status}`
+      };
+    }
+
+    const degraded = response.database.status !== 'ok' || response.videoService.status !== 'ok';
+    json(res, degraded ? 503 : 200, response);
     return;
   }
 

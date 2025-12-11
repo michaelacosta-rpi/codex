@@ -69,3 +69,4 @@ Replace the placeholder images for the video service and database with your prod
 ## Notes
 - User impersonation in the sidebar immediately updates RBAC gates for navigation and page actions.
 - Actions like refund/terminate/export are present to illustrate permission-aware controls; they are placeholders for the backend flows outlined in `docs/admin_spa_plan.md`.
+- Telemetry helpers and sink adapters for Amplitude, FullStory, and tag managers are documented in `docs/telemetry.md` to make hooking in product analytics straightforward.

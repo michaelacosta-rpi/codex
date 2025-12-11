@@ -1,7 +1,7 @@
 import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents, ssoConnections } from './data/referenceData.js';
 import { formatMoney, formatDate, createEl } from './components/utils.js';
 import { adminPortalOrigin } from './config.js';
-import { initTelemetry, logEvent, recordMetric } from './telemetry.js';
+import { createAmplitudeSink, createDataLayerSink, createFullStorySink, initTelemetry, logEvent, recordMetric } from './telemetry.js';
 
 const routes = [
   { path: '', label: 'Dashboard', icon: '🧭', permissions: [] },
@@ -19,7 +19,8 @@ let currentUser = users[0];
 const getRouteKey = () => (window.location.hash.replace('#/', '') || '').split('?')[0];
 
 initTelemetry({
-  getContext: () => ({ userId: currentUser.id, userRoles: currentUser.roles, route: getRouteKey() })
+  getContext: () => ({ userId: currentUser.id, userRoles: currentUser.roles, route: getRouteKey() }),
+  sinks: [createAmplitudeSink(), createFullStorySink(), createDataLayerSink()]
 });
 
 function hasPermission(permission) {

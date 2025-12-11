@@ -40,7 +40,12 @@ const state = {
     invitationError: null,
     invitationStatus: null,
     pendingInvites: [],
-    guestRole: ''
+    guestRole: '',
+    summons: [],
+    messages: [],
+    messageDraft: '',
+    messageRecipients: ['all'],
+    messageError: null
   }
 };
 
@@ -65,6 +70,7 @@ async function hydrate() {
     const primarySession = state.data?.videoSessions?.[0];
     if (primarySession) {
       state.videoUi = {
+        ...state.videoUi,
         accessPolicy: primarySession.accessPolicy || 'verified',
         verificationMethod: primarySession.verificationMethod || 'magic_link',
         cacheMinutes: primarySession.cacheMinutes || 30,
@@ -87,7 +93,12 @@ async function hydrate() {
         invitationError: null,
         invitationStatus: null,
         pendingInvites: [],
-        guestRole: ''
+        guestRole: '',
+        summons: primarySession.summons || createDefaultSummons(primarySession),
+        messages: primarySession.messages || createDefaultMessages(primarySession),
+        messageDraft: '',
+        messageRecipients: ['all'],
+        messageError: null
       };
     }
   } catch (err) {
@@ -497,6 +508,7 @@ function renderVideoPortal() {
   layout.appendChild(rosterCard);
   layout.appendChild(renderMeetingAdminCard(editable));
   layout.appendChild(mediatorCard);
+  layout.appendChild(renderMediatorMessaging(session));
   return layout;
 }
 
@@ -778,6 +790,220 @@ function renderMeetingAdminCard(editable) {
   return card;
 }
 
+function renderMediatorMessaging(session) {
+  const card = createEl('div', 'card messaging-card');
+  card.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Mediator-only messaging']),
+      createEl('span', 'badge success', ['Live session'])
+    ])
+  );
+
+  card.appendChild(
+    createEl('p', 'muted', [
+      'Parties can summon the mediator for help, but only the mediator can initiate messages across sides. Summons stay separate so mediator dispatch does not slow down requests for help.'
+    ])
+  );
+
+  card.appendChild(renderSummonPanel(session));
+  card.appendChild(renderMessageConsole(session));
+  return card;
+}
+
+function renderSummonPanel(session) {
+  const panel = createEl('div', 'summon-panel');
+  panel.appendChild(
+    createEl('div', 'summon-header', [
+      createEl('strong', null, ['Party summons']),
+      createEl('span', 'pill soft', ['Side-specific requests'])
+    ])
+  );
+
+  const summons = state.videoUi.summons || [];
+  if (!summons.length) {
+    panel.appendChild(
+      createEl('div', 'notice muted', ['No summons yet. Parties can still ring the mediator even while messages are being sent.'])
+    );
+  }
+
+  summons.forEach((summon) => {
+    const badge = createEl('span', `badge ${summon.status === 'resolved' ? 'success' : summon.status === 'acknowledged' ? 'warning' : 'info'}`.trim(), [
+      summon.status === 'resolved' ? 'Resolved' : summon.status === 'acknowledged' ? 'Acknowledged' : 'Open']
+    );
+
+    const detail = createEl('div', 'stack', [
+      createEl('div', 'row space-between', [
+        createEl('strong', null, [summon.side || 'Party']),
+        badge
+      ]),
+      createEl('span', 'muted', [`Requested by ${summon.requestedBy || 'Party representative'}`]),
+      createEl('span', 'muted small', [summon.note || 'Requested mediator presence']),
+      createEl('span', 'muted small', [formatDate(summon.timestamp)])
+    ]);
+
+    const actions = createEl('div', 'row');
+    const acknowledge = createEl('button', 'button ghost', ['Acknowledge']);
+    acknowledge.disabled = summon.status !== 'open';
+    acknowledge.onclick = () => updateSummonStatus(summon.id, 'acknowledged');
+
+    const resolve = createEl('button', 'button outline', ['Mark resolved']);
+    resolve.disabled = summon.status === 'resolved';
+    resolve.onclick = () => updateSummonStatus(summon.id, 'resolved');
+
+    actions.appendChild(acknowledge);
+    actions.appendChild(resolve);
+
+    panel.appendChild(createEl('div', 'summon-row', [createEl('div', 'avatar summon', [summon.side?.[0] || 'S']), detail, actions]));
+  });
+
+  const simulationRow = createEl('div', 'summon-simulation row');
+  simulationRow.appendChild(createEl('span', 'muted small', ['Simulate a party summon:']));
+  (session.sides || []).forEach((side) => {
+    const button = createEl('button', 'button ghost', [side.label || 'Party side']);
+    button.onclick = () => simulateSummon(side.label);
+    simulationRow.appendChild(button);
+  });
+  if (simulationRow.children.length > 1) {
+    panel.appendChild(simulationRow);
+  }
+
+  return panel;
+}
+
+function renderMessageConsole(session) {
+  const console = createEl('div', 'messaging-console');
+  console.appendChild(createEl('div', 'section-header', [createEl('h4', null, ['Send a mediator announcement']), createEl('span', 'pill', ['Mediator initiated'])]));
+
+  const recipients = buildRecipientOptions(session);
+  const recipientRow = createEl('div', 'recipient-grid');
+  recipients.forEach((recipient) => {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = recipient.id;
+    checkbox.checked = state.videoUi.messageRecipients.includes(recipient.id);
+    checkbox.onchange = (e) => toggleRecipient(recipient.id, e.target.checked);
+    const label = createEl('label', 'pill-checkbox', [checkbox, createEl('span', null, [recipient.label])]);
+    recipientRow.appendChild(label);
+  });
+  console.appendChild(recipientRow);
+
+  console.appendChild(
+    createEl('div', 'notice muted', [
+      'Only the mediator can start messages. Parties cannot initiate cross-side chats; they respond to mediator announcements or use the summon button above.'
+    ])
+  );
+
+  const input = document.createElement('textarea');
+  input.placeholder = 'Share guidance, schedule updates, or next steps. Multi-select recipients to keep sides separated.';
+  input.rows = 3;
+  input.value = state.videoUi.messageDraft;
+  input.oninput = (e) => updateVideoSetting('messageDraft', e.target.value);
+
+  const sendButton = createEl('button', 'button primary', ['Send message']);
+  sendButton.onclick = () => sendMediatorMessage();
+
+  const composeRow = createEl('div', 'stack messaging-compose', [input, createEl('div', 'row space-between', [createEl('span', 'muted small', ['Mediator can notify one or both sides at once; recipients are listed in the log.']), sendButton])]);
+  console.appendChild(composeRow);
+
+  if (state.videoUi.messageError) {
+    console.appendChild(createEl('div', 'notice warning', [state.videoUi.messageError]));
+  }
+
+  console.appendChild(renderMessageLog());
+  return console;
+}
+
+function renderMessageLog() {
+  const log = createEl('div', 'message-log');
+  if (!state.videoUi.messages.length) {
+    log.appendChild(createEl('div', 'notice muted', ['No mediator messages sent yet. Your dispatch history will appear here.']));
+    return log;
+  }
+
+  state.videoUi.messages.forEach((message) => {
+    const recipients = createEl('div', 'pill-row', formatRecipients(message.recipients).map((label) => createEl('span', 'pill soft', [label])));
+    const meta = createEl('div', 'row space-between', [createEl('span', 'muted small', ['Mediator']), createEl('span', 'muted small', [formatDate(message.timestamp)])]);
+    const body = createEl('div', 'message-body', [message.body]);
+    log.appendChild(createEl('div', 'message-item', [meta, recipients, body]));
+  });
+  return log;
+}
+
+function buildRecipientOptions(session) {
+  const options = [{ id: 'all', label: 'All participants (both sides)' }];
+  (session.sides || []).forEach((side) => {
+    options.push({ id: `side-${side.label}`, label: `${side.label} only` });
+  });
+  (session.participants || []).forEach((participant) => {
+    options.push({ id: `person-${participant.name}`, label: `${participant.name} — ${participant.designation || 'Participant'}` });
+  });
+  return options;
+}
+
+function toggleRecipient(id, enabled) {
+  const recipients = new Set(state.videoUi.messageRecipients);
+  if (enabled) {
+    recipients.add(id);
+  } else {
+    recipients.delete(id);
+  }
+  const nextRecipients = recipients.size ? Array.from(recipients) : ['all'];
+  state.videoUi = { ...state.videoUi, messageRecipients: nextRecipients, messageError: null };
+  render();
+}
+
+function sendMediatorMessage() {
+  const draft = (state.videoUi.messageDraft || '').trim();
+  if (!draft) {
+    updateVideoSetting('messageError', 'Enter a message before sending.');
+    return;
+  }
+
+  const newMessage = {
+    id: `msg-${Date.now()}`,
+    body: draft,
+    recipients: state.videoUi.messageRecipients.length ? state.videoUi.messageRecipients : ['all'],
+    timestamp: Date.now()
+  };
+
+  state.videoUi = {
+    ...state.videoUi,
+    messages: [newMessage, ...state.videoUi.messages],
+    messageDraft: '',
+    messageError: null
+  };
+  render();
+}
+
+function updateSummonStatus(id, status) {
+  const summons = state.videoUi.summons.map((summon) => (summon.id === id ? { ...summon, status } : summon));
+  state.videoUi = { ...state.videoUi, summons };
+  render();
+}
+
+function simulateSummon(side) {
+  const summon = {
+    id: `sum-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    side: side || 'Party side',
+    requestedBy: `${side || 'Party'} team`,
+    note: 'Requests mediator to join their caucus.',
+    status: 'open',
+    timestamp: Date.now()
+  };
+  state.videoUi = { ...state.videoUi, summons: [summon, ...state.videoUi.summons] };
+  render();
+}
+
+function formatRecipients(recipients = []) {
+  if (!recipients.length) return ['All participants'];
+  return recipients.map((recipient) => {
+    if (recipient === 'all') return 'All participants';
+    if (recipient.startsWith('side-')) return `${recipient.replace('side-', '')} only`;
+    if (recipient.startsWith('person-')) return recipient.replace('person-', '');
+    return recipient;
+  });
+}
+
 function addCoMediator() {
   const name = (state.videoUi.coMediatorName || '').trim();
   const email = (state.videoUi.coMediatorEmail || '').trim();
@@ -905,6 +1131,39 @@ function createWaitingEntry({ name, side, expiresAt, role }) {
     expiresAt: expiresAt || Date.now() + 5 * 60 * 1000,
     status: 'waiting'
   };
+}
+
+function createDefaultSummons(session = {}) {
+  const sides = session.sides || [];
+  if (!sides.length) return [];
+  return sides.slice(0, 2).map((side, index) => ({
+    id: `sum-seed-${index}`,
+    side: side.label || 'Party side',
+    requestedBy: index === 0 ? 'Plaintiff counsel' : 'Carrier adjuster',
+    note: index === 0 ? 'Ready for mediator to join private caucus.' : 'Has offer update, requesting mediator.',
+    status: index === 0 ? 'acknowledged' : 'open',
+    timestamp: Date.now() - (index + 1) * 20 * 60 * 1000
+  }));
+}
+
+function createDefaultMessages(session = {}) {
+  const sides = session.sides || [];
+  const firstSide = sides[0]?.label;
+  const secondSide = sides[1]?.label;
+  return [
+    {
+      id: 'msg-seed-1',
+      body: 'Mediator will rotate between caucuses every 15 minutes. Respond here if you need to pause.',
+      recipients: ['all'],
+      timestamp: Date.now() - 45 * 60 * 1000
+    },
+    {
+      id: 'msg-seed-2',
+      body: `${firstSide || 'Side A'}: preparing to move to joint session in 5 minutes. ${secondSide || 'Side B'} will be notified separately.`,
+      recipients: firstSide ? [`side-${firstSide}`] : ['all'],
+      timestamp: Date.now() - 25 * 60 * 1000
+    }
+  ];
 }
 
 function renderGuestForm(session) {

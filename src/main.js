@@ -234,15 +234,25 @@ function renderMain() {
 }
 
 function renderUserMenu() {
-  const menu = createEl('div', 'user-menu');
+  const menu = createEl('div', 'user-menu stack');
+  const invitationName = currentUser.invitationName || currentUser.name;
   const meta = createEl('div', 'stack', [createEl('strong', null, [currentUser.name]), createEl('span', 'muted', [currentUser.email])]);
-  menu.appendChild(meta);
-  const logout = createEl('button', 'button', ['Simulate Logout']);
+  const settings = createEl('div', 'menu-section', [
+    createEl('div', 'menu-title', ['User settings']),
+    createEl('div', 'menu-row', [createEl('span', 'muted', ['Email']), createEl('span', null, [currentUser.email])]),
+    createEl('div', 'menu-row', [createEl('span', 'muted', ['Name']), createEl('span', null, [currentUser.name])]),
+    createEl('div', 'menu-row', [createEl('span', 'muted', ['Invitation display name']), createEl('span', null, [invitationName])])
+  ]);
+
+  const logout = createEl('button', 'button danger ghost', ['Logout']);
   logout.onclick = () => {
     logEvent('auth.logout.simulated', { userId: currentUser.id });
     recordMetric('auth.logout', 1, { userId: currentUser.id });
     alert('Auth placeholder: implement JWT flow per plan.');
   };
+
+  menu.appendChild(meta);
+  menu.appendChild(settings);
   menu.appendChild(logout);
   return menu;
 }

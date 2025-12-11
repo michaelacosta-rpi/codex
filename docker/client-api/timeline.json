@@ -1,0 +1,23 @@
+[
+  {
+    "id": "EVT-1001",
+    "type": "upload",
+    "title": "Evidence package uploaded",
+    "occurredAt": "2025-01-20T14:45:00Z",
+    "actor": "Dana Johnson"
+  },
+  {
+    "id": "EVT-0998",
+    "type": "note",
+    "title": "Mediator reviewed case file",
+    "occurredAt": "2025-01-18T09:20:00Z",
+    "actor": "Jordan Ellis"
+  },
+  {
+    "id": "EVT-0992",
+    "type": "schedule",
+    "title": "Session confirmed",
+    "occurredAt": "2025-01-15T17:00:00Z",
+    "actor": "Scheduler"
+  }
+]

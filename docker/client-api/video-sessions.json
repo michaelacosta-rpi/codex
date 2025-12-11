@@ -1,0 +1,29 @@
+[
+  {
+    "id": "med-5001",
+    "title": "Johnson v. Northwind — coverage dispute",
+    "scheduledFor": "2025-02-18T15:00:00Z",
+    "durationMinutes": 90,
+    "status": "Scheduled",
+    "joinLink": "http://video-hosting-service/rooms/med-5001",
+    "accessPolicy": "verified",
+    "verificationMethod": "magic_link",
+    "cacheMinutes": 60,
+    "sides": [
+      {
+        "label": "Policyholder side",
+        "waitingGuests": [
+          { "name": "Alex (guest)" },
+          { "name": "Taylor (guest)" }
+        ]
+      },
+      { "label": "Carrier side", "waitingGuests": [] }
+    ],
+    "participants": [
+      { "name": "Dana Johnson", "designation": "Client", "authenticated": true },
+      { "name": "Leah Kim", "designation": "Counsel", "authenticated": true },
+      { "name": "Jordan Ellis", "designation": "Mediator", "authenticated": true },
+      { "name": "Chris Patel", "designation": "Carrier representative", "authenticated": false }
+    ]
+  }
+]

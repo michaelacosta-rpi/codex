@@ -1,0 +1,16 @@
+[
+  {
+    "id": "INV-1001",
+    "status": "open",
+    "issuedAt": "2025-01-15T12:00:00Z",
+    "dueAt": "2025-02-15T12:00:00Z",
+    "amountCents": 85000
+  },
+  {
+    "id": "INV-0997",
+    "status": "paid",
+    "issuedAt": "2024-12-15T12:00:00Z",
+    "dueAt": "2025-01-15T12:00:00Z",
+    "amountCents": 64000
+  }
+]

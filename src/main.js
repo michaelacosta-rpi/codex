@@ -16,6 +16,31 @@ const routes = [
 
 let currentUser = users[0];
 
+const parties = [
+  { id: 'pty-1', name: 'Jordan Lee', role: 'Plaintiff' },
+  { id: 'pty-2', name: 'Riley Chen', role: 'Defendant' },
+  { id: 'pty-3', name: 'Alex Morgan', role: 'Mediator' }
+];
+
+let uploadedDocuments = [
+  {
+    id: 'doc-1001',
+    name: 'Settlement Agreement Draft.pdf',
+    type: 'Settlement agreement',
+    uploadedAt: '2025-02-10T15:45:00Z',
+    sharedWith: ['pty-1', 'pty-2'],
+    signatures: [{ id: 'sig-900', partyId: 'pty-1', name: 'Jordan Lee', signedAt: '2025-02-11T09:05:00Z' }]
+  },
+  {
+    id: 'doc-1002',
+    name: 'Mediator Statement.txt',
+    type: 'Mediator statement',
+    uploadedAt: '2025-02-09T12:30:00Z',
+    sharedWith: ['pty-1', 'pty-2', 'pty-3'],
+    signatures: []
+  }
+];
+
 const getRouteKey = () => (window.location.hash.replace('#/', '') || '').split('?')[0];
 
 initTelemetry({
@@ -31,6 +56,33 @@ function hasPermission(permission) {
 
 function can(permission) {
   return hasPermission(Array.isArray(permission) ? permission : [permission]);
+}
+
+function getParty(partyId) {
+  return parties.find((p) => p.id === partyId);
+}
+
+function updateDocumentShare(docId, partyId, isShared) {
+  uploadedDocuments = uploadedDocuments.map((doc) => {
+    if (doc.id !== docId) return doc;
+    const sharedWith = isShared ? [...new Set([...doc.sharedWith, partyId])] : doc.sharedWith.filter((id) => id !== partyId);
+    return { ...doc, sharedWith };
+  });
+  logEvent('agreement.share.updated', { docId, partyId, isShared });
+}
+
+function addSignature(docId, partyId, name) {
+  uploadedDocuments = uploadedDocuments.map((doc) => {
+    if (doc.id !== docId) return doc;
+    const signedAt = new Date().toISOString();
+    const existing = doc.signatures.find((sig) => sig.partyId === partyId);
+    const signatures = existing
+      ? doc.signatures.map((sig) => (sig.partyId === partyId ? { ...sig, name, signedAt } : sig))
+      : [...doc.signatures, { id: `sig-${Date.now()}`, partyId, name, signedAt }];
+    return { ...doc, signatures };
+  });
+  logEvent('agreement.signed', { docId, partyId });
+  recordMetric('agreement.signature', 1, { docId, partyId });
 }
 
 function setRoute(path) {
@@ -333,7 +385,168 @@ function renderSessions() {
   grid.appendChild(loginCard);
 
   section.appendChild(grid);
+  section.appendChild(renderAgreementWorkflow());
   return section;
+}
+
+function renderAgreementWorkflow() {
+  const card = createEl('div', 'card stack');
+  card.appendChild(createEl('h3', null, ['Agreements & signatures for parties']));
+  card.appendChild(
+    createEl('p', 'muted', [
+      'Upload settlement agreements or mediator statements, choose who can view them, and capture click-to-sign acknowledgements.'
+    ])
+  );
+
+  const uploadForm = document.createElement('form');
+  uploadForm.className = 'agreement-upload';
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.pdf,.doc,.docx,.txt';
+  fileInput.required = true;
+
+  const typeSelect = document.createElement('select');
+  ['Settlement agreement', 'Mediator statement', 'Evidence/Other'].forEach((type) => {
+    const option = document.createElement('option');
+    option.value = type;
+    option.textContent = type;
+    typeSelect.appendChild(option);
+  });
+
+  const uploadButton = createEl('button', 'button primary', ['Upload & share']);
+  uploadButton.type = 'submit';
+  uploadForm.append(
+    createEl('div', 'stack grow', [createEl('label', 'label', ['Document']), fileInput, createEl('div', 'muted', ['Local-only preview; share controls below determine visibility.'])]),
+    createEl('div', 'stack', [createEl('label', 'label', ['Type']), typeSelect]),
+    createEl('div', 'stack align-end', [uploadButton])
+  );
+
+  uploadForm.onsubmit = (e) => {
+    e.preventDefault();
+    if (!fileInput.files?.length) return;
+    const file = fileInput.files[0];
+    const newDoc = {
+      id: `doc-${Date.now()}`,
+      name: file.name,
+      type: typeSelect.value,
+      uploadedAt: new Date().toISOString(),
+      sharedWith: parties.map((p) => p.id),
+      signatures: [],
+      link: URL.createObjectURL(file)
+    };
+    uploadedDocuments = [newDoc, ...uploadedDocuments];
+    logEvent('agreement.uploaded', { docId: newDoc.id, type: newDoc.type });
+    recordMetric('agreement.upload', 1, { type: newDoc.type });
+    render();
+  };
+
+  card.appendChild(uploadForm);
+
+  const list = createEl('div', 'document-list');
+  uploadedDocuments.forEach((doc) => list.appendChild(renderDocumentCard(doc)));
+  card.appendChild(list);
+  return card;
+}
+
+function renderDocumentCard(doc) {
+  const wrapper = createEl('div', 'document-card');
+  const header = createEl('div', 'row space-between', [
+    createEl('div', 'stack', [createEl('strong', null, [doc.name]), createEl('span', 'muted', [`Uploaded ${formatDate(doc.uploadedAt)}`])]),
+    createEl('span', 'pill', [doc.type])
+  ]);
+  wrapper.appendChild(header);
+
+  if (doc.link) {
+    const link = document.createElement('a');
+    link.href = doc.link;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.className = 'pill soft';
+    link.textContent = 'Open shared copy';
+    wrapper.appendChild(createEl('div', 'row', [link, createEl('span', 'muted', ['Object URL retained in-memory only'])]));
+  }
+
+  const shareRow = createEl('div', 'stack');
+  shareRow.appendChild(createEl('div', 'label', ['Share with parties']));
+  const partyToggles = createEl('div', 'party-share');
+  parties.forEach((party) => {
+    const label = createEl('label', 'pill-checkbox', [createEl('span', null, [`${party.name} (${party.role})`])]);
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = doc.sharedWith.includes(party.id);
+    checkbox.onchange = (e) => {
+      updateDocumentShare(doc.id, party.id, e.target.checked);
+      render();
+    };
+    label.insertBefore(checkbox, label.firstChild);
+    partyToggles.appendChild(label);
+  });
+  shareRow.appendChild(partyToggles);
+  wrapper.appendChild(shareRow);
+
+  const signatureArea = createEl('div', 'signature-area');
+  signatureArea.appendChild(createEl('div', 'label', ['Click to sign']));
+  const signatureForm = document.createElement('form');
+  signatureForm.className = 'signature-form';
+  const partySelect = document.createElement('select');
+  doc.sharedWith.forEach((partyId) => {
+    const party = getParty(partyId);
+    if (!party) return;
+    const opt = document.createElement('option');
+    opt.value = party.id;
+    opt.textContent = `${party.name} (${party.role})`;
+    partySelect.appendChild(opt);
+  });
+  if (!partySelect.children.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Share with a party to enable signing';
+    partySelect.appendChild(opt);
+    partySelect.disabled = true;
+  }
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.placeholder = 'Enter your name as signature';
+  nameInput.required = true;
+
+  const signButton = createEl('button', 'button primary', ['Click to sign']);
+  signButton.type = 'submit';
+  signButton.disabled = partySelect.disabled;
+
+  signatureForm.append(partySelect, nameInput, signButton);
+  signatureForm.onsubmit = (e) => {
+    e.preventDefault();
+    if (!partySelect.value) return;
+    const signerName = nameInput.value.trim();
+    if (!signerName) {
+      alert('Enter a name to sign.');
+      return;
+    }
+    addSignature(doc.id, partySelect.value, signerName);
+    nameInput.value = '';
+    render();
+  };
+  signatureArea.appendChild(signatureForm);
+
+  const signatureList = createEl('div', 'signature-list');
+  if (!doc.signatures.length) {
+    signatureList.appendChild(createEl('div', 'muted', ['No signatures captured yet.']));
+  } else {
+    doc.signatures.forEach((sig) => {
+      const party = getParty(sig.partyId);
+      signatureList.appendChild(
+        createEl('div', 'signature-row', [
+          createEl('div', 'stack', [createEl('strong', null, [sig.name]), createEl('span', 'muted', [party ? party.name : 'Unknown party'])]),
+          createEl('span', 'pill soft', [`Signed ${formatDate(sig.signedAt)}`])
+        ])
+      );
+    });
+  }
+  signatureArea.appendChild(signatureList);
+  wrapper.appendChild(signatureArea);
+
+  return wrapper;
 }
 
 function renderFlags() {

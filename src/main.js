@@ -1,5 +1,6 @@
 import { roles, users, orders, sessions, featureFlags, auditLogs, loginEvents } from './data/mockData.js';
 import { formatMoney, formatDate, createEl } from './components/utils.js';
+import { adminPortalOrigin } from './config.js';
 
 const routes = [
   { path: '', label: 'Dashboard', icon: '🧭', permissions: [] },
@@ -86,7 +87,9 @@ function renderMain() {
   const routeKey = hash.split('?')[0];
   const activeRoute = routes.find((r) => r.path === routeKey) || routes[0];
   const crumbs = createEl('div', 'breadcrumbs', [createEl('span', null, ['Home']), createEl('span', null, [activeRoute.label])]);
-  const topbar = createEl('div', 'topbar', [crumbs, renderUserMenu()]);
+  const connectionChip = createEl('div', 'chip soft', [`Admin portal: ${adminPortalOrigin}`]);
+  const actions = createEl('div', 'topbar-actions', [connectionChip, renderUserMenu()]);
+  const topbar = createEl('div', 'topbar', [crumbs, actions]);
   main.appendChild(topbar);
 
   const content = createEl('div', 'content');

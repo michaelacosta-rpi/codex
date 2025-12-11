@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  client-spa:
+    build: .
+    image: codex-client-spa:latest
+    container_name: codex-client-spa
+    environment:
+      ADMIN_PORTAL_ORIGIN: http://admin-portal
+    ports:
+      - "4173:80"
+    depends_on:
+      - admin-portal
+
+  admin-portal:
+    image: nginx:1.27-alpine
+    container_name: codex-admin-portal
+    volumes:
+      - ./docs:/usr/share/nginx/html:ro
+    ports:
+      - "4174:80"

@@ -6,13 +6,19 @@ const routes = [
   { path: '', label: 'Overview' },
   { path: 'library', label: 'Library' },
   { path: 'billing', label: 'Billing' },
+  { path: 'video', label: 'Video sessions' },
   { path: 'support', label: 'Support' }
 ];
 
 const state = {
   loading: true,
   error: null,
-  data: null
+  data: null,
+  videoUi: {
+    accessPolicy: 'verified',
+    verificationMethod: 'magic_link',
+    cacheMinutes: 30
+  }
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -29,6 +35,14 @@ async function hydrate() {
 
   try {
     state.data = await fetchClientPortalData();
+    const primarySession = state.data?.videoSessions?.[0];
+    if (primarySession) {
+      state.videoUi = {
+        accessPolicy: primarySession.accessPolicy || 'verified',
+        verificationMethod: primarySession.verificationMethod || 'magic_link',
+        cacheMinutes: primarySession.cacheMinutes || 30
+      };
+    }
   } catch (err) {
     state.error = err;
   } finally {
@@ -135,6 +149,9 @@ function renderContent() {
       break;
     case 'billing':
       content.appendChild(renderBilling());
+      break;
+    case 'video':
+      content.appendChild(renderVideoPortal());
       break;
     case 'support':
       content.appendChild(renderSupport());
@@ -267,6 +284,163 @@ function renderSupport() {
   section.appendChild(cta);
 
   return section;
+}
+
+function renderVideoPortal() {
+  const sessions = state.data?.videoSessions || [];
+  const session = sessions[0] || {};
+  const editable = !session.startedAt;
+  const accessLockedBadge = createEl('span', `badge ${editable ? 'success' : 'warning'}`, [
+    editable ? 'Editable until first participant joins' : 'Locked after mediation starts'
+  ]);
+
+  const layout = createEl('div', 'video-grid');
+
+  const schedulingCard = createEl('div', 'card');
+  schedulingCard.appendChild(
+    createEl('div', 'section-header', [
+      createEl('div', 'stack', [
+        createEl('h3', null, ['Scheduling & access']),
+        createEl('span', 'muted', [
+          'Sessions are link-based and can be locked to verified email or open to anyone with the join link until the first join.'
+        ])
+      ]),
+      accessLockedBadge
+    ])
+  );
+
+  schedulingCard.appendChild(
+    createEl('div', 'muted', [
+      `Next session: ${session.scheduledFor ? formatDate(session.scheduledFor) : 'Not scheduled'} • ${
+        session.durationMinutes || 60
+      } minutes • `,
+      createEl('strong', null, [session.title || 'Mediation session'])
+    ])
+  );
+
+  const accessRow = createEl('div', 'setting-row', [createEl('div', 'muted', ['Access policy'])]);
+  const accessGroup = createToggleGroup(
+    [
+      {
+        label: 'Verified emails only',
+        value: 'verified',
+        helper: 'Parties validate via email link or code; mediator must be authenticated.'
+      },
+      {
+        label: 'Anyone with the link',
+        value: 'open',
+        helper: 'Lobby enabled, optional waiting-room admission for unauthenticated guests.'
+      }
+    ],
+    state.videoUi.accessPolicy,
+    (value) => updateVideoSetting('accessPolicy', value),
+    !editable
+  );
+  accessRow.appendChild(accessGroup);
+  schedulingCard.appendChild(accessRow);
+
+  const joinLink = createEl('div', 'join-link', [
+    createEl('div', 'muted', ['Join link']),
+    createEl('div', 'link-row', [createEl('code', null, [session.joinLink || 'https://video.codex.local/join']), createEl('span', 'pill', ['Shareable'])])
+  ]);
+  schedulingCard.appendChild(joinLink);
+
+  const verificationCard = createEl('div', 'card');
+  verificationCard.appendChild(
+    createEl('div', 'section-header', [createEl('h3', null, ['Verification & rejoin caching']), createEl('span', 'badge muted', ['Email gate'])])
+  );
+
+  const verificationGroup = createToggleGroup(
+    [
+      { label: 'Magic link', value: 'magic_link', helper: 'Send a one-time link to verify email ownership.' },
+      { label: 'One-time code', value: 'code', helper: 'Send a short code to enter in the lobby.' }
+    ],
+    state.videoUi.verificationMethod,
+    (value) => updateVideoSetting('verificationMethod', value),
+    !editable
+  );
+  verificationCard.appendChild(createEl('div', 'muted', ['Verification sent when a party attempts to join; mediator always authenticated.']));
+  verificationCard.appendChild(verificationGroup);
+  verificationCard.appendChild(
+    createEl('div', 'notice', [
+      `Verified tokens cached for ${state.videoUi.cacheMinutes} minutes so disconnected parties can rejoin without re-verifying; mediator joins always requires authentication.`
+    ])
+  );
+
+  const waitingCard = createEl('div', 'card');
+  waitingCard.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Waiting room & guest admission']),
+      createEl('span', 'badge warning', ['Per-side controls'])
+    ])
+  );
+  waitingCard.appendChild(
+    createEl('p', 'muted', [
+      'If authentication is required, unauthenticated guests stay in a waiting room. Mediator can admit one guest per side when mediation rules allow.'
+    ])
+  );
+
+  const waitingList = createEl('div', 'waiting-room');
+  (session.sides || []).forEach((side) => {
+    const sideRow = createEl('div', 'waiting-row', [
+      createEl('div', 'stack', [createEl('strong', null, [side.label || 'Party side']), createEl('span', 'muted', [`${side.waitingGuests || 0} guest(s) waiting`])]),
+      createEl('div', 'row', [
+        createEl('span', 'pill', ['Admit unauthenticated guest']),
+        createEl('button', 'button primary', ['Admit now'])
+      ])
+    ]);
+    waitingList.appendChild(sideRow);
+  });
+  waitingCard.appendChild(waitingList);
+
+  const rosterCard = createEl('div', 'card');
+  rosterCard.appendChild(
+    createEl('div', 'section-header', [createEl('h3', null, ['Participants & designations']), createEl('span', 'badge muted', ['Mediator required to authenticate'])])
+  );
+
+  const rosterTable = createEl('table', 'table');
+  rosterTable.innerHTML = `
+    <thead><tr><th>Name</th><th>Designation</th><th>Authentication</th><th>Status</th></tr></thead>
+    <tbody>
+      ${(session.participants || [])
+        .map(
+          (participant) => `
+        <tr>
+          <td>${participant.name}</td>
+          <td>${participant.designation}</td>
+          <td>${participant.authenticated ? 'Verified' : 'Awaiting verification'}</td>
+          <td><span class="badge ${participant.authenticated ? 'success' : 'warning'}">${
+            participant.designation === 'Mediator' ? 'Must be authenticated' : participant.authenticated ? 'Ready' : 'Needs check'
+          }</span></td>
+        </tr>`
+        )
+        .join('')}
+    </tbody>`;
+  rosterCard.appendChild(rosterTable);
+
+  layout.appendChild(schedulingCard);
+  layout.appendChild(verificationCard);
+  layout.appendChild(waitingCard);
+  layout.appendChild(rosterCard);
+  return layout;
+}
+
+function updateVideoSetting(key, value) {
+  state.videoUi = { ...state.videoUi, [key]: value };
+  render();
+}
+
+function createToggleGroup(options, activeValue, onSelect, disabled = false) {
+  const group = createEl('div', 'toggle-group');
+  options.forEach((option) => {
+    const button = createEl('button', `button outline ${activeValue === option.value ? 'primary' : ''}`.trim(), [
+      createEl('div', 'stack', [createEl('span', null, [option.label]), createEl('span', 'muted', [option.helper || ''])])
+    ]);
+    button.disabled = disabled;
+    button.onclick = () => onSelect(option.value);
+    group.appendChild(button);
+  });
+  return group;
 }
 
 function createStatCard(title, value, helper) {

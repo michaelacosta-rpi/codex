@@ -689,6 +689,22 @@ button:focus-visible {
   line-height: 1.5;
 }
 
+.mediation-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mediation-outcome .outcome-select,
+.mediation-outcome select.outcome-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-strong);
+  font-weight: 600;
+}
+
 @media (max-width: 768px) {
   .client-hero,
   .navbar,

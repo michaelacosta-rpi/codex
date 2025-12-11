@@ -30,6 +30,15 @@ const fallbackVideoSessions = [
     verificationMethod: 'magic_link',
     cacheMinutes: 60,
     startedAt: null,
+    meetingAdmins: [
+      {
+        name: 'Jordan Ellis',
+        email: 'jordan.ellis@northwindmediators.com',
+        designation: 'Mediator host',
+        permissions: ['Admit/remove', 'Breakout control', 'Recording', 'Reset join tokens'],
+        addedBy: 'Case intake automation'
+      }
+    ],
     sides: [
       {
         label: 'Policyholder side',

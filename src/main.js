@@ -22,13 +22,16 @@ const parties = [
   { id: 'pty-3', name: 'Alex Morgan', role: 'Mediator' }
 ];
 
+const mediatorParty = parties.find((p) => p.role === 'Mediator');
+
 let uploadedDocuments = [
   {
     id: 'doc-1001',
     name: 'Settlement Agreement Draft.pdf',
     type: 'Settlement agreement',
     uploadedAt: '2025-02-10T15:45:00Z',
-    sharedWith: ['pty-1', 'pty-2'],
+    ownerPartyId: 'pty-1',
+    sharedWith: ['pty-1', 'pty-2', 'pty-3'],
     signatures: [{ id: 'sig-900', partyId: 'pty-1', name: 'Jordan Lee', signedAt: '2025-02-11T09:05:00Z' }]
   },
   {
@@ -36,6 +39,7 @@ let uploadedDocuments = [
     name: 'Mediator Statement.txt',
     type: 'Mediator statement',
     uploadedAt: '2025-02-09T12:30:00Z',
+    ownerPartyId: 'pty-3',
     sharedWith: ['pty-1', 'pty-2', 'pty-3'],
     signatures: []
   }
@@ -62,13 +66,54 @@ function getParty(partyId) {
   return parties.find((p) => p.id === partyId);
 }
 
-function updateDocumentShare(docId, partyId, isShared) {
+function getSidePartyIds(role) {
+  return parties.filter((p) => p.role === role).map((p) => p.id);
+}
+
+function getOpposingSidePartyIds(partyId) {
+  const owner = getParty(partyId);
+  if (!owner) return [];
+  return parties.filter((p) => p.role !== owner.role && p.role !== 'Mediator').map((p) => p.id);
+}
+
+function setMediatorShare(docId, enabled) {
   uploadedDocuments = uploadedDocuments.map((doc) => {
     if (doc.id !== docId) return doc;
-    const sharedWith = isShared ? [...new Set([...doc.sharedWith, partyId])] : doc.sharedWith.filter((id) => id !== partyId);
-    return { ...doc, sharedWith };
+    const owner = getParty(doc.ownerPartyId);
+    const ownerSideIds = owner ? getSidePartyIds(owner.role) : [];
+    const opposingSideIds = owner ? getOpposingSidePartyIds(owner.id) : [];
+    const sharedWith = new Set([...doc.sharedWith, ...ownerSideIds]);
+
+    if (enabled) {
+      sharedWith.add(mediatorParty.id);
+    } else {
+      sharedWith.delete(mediatorParty.id);
+      opposingSideIds.forEach((id) => sharedWith.delete(id));
+    }
+
+    return { ...doc, sharedWith: Array.from(sharedWith) };
   });
-  logEvent('agreement.share.updated', { docId, partyId, isShared });
+  logEvent('agreement.share.mediator', { docId, enabled });
+}
+
+function setOpposingSideShare(docId, enabled) {
+  uploadedDocuments = uploadedDocuments.map((doc) => {
+    if (doc.id !== docId) return doc;
+    const owner = getParty(doc.ownerPartyId);
+    const opposingSideIds = owner ? getOpposingSidePartyIds(owner.id) : [];
+    const sharedWith = new Set(doc.sharedWith);
+    if (!sharedWith.has(mediatorParty.id)) return doc;
+
+    if (enabled) {
+      opposingSideIds.forEach((id) => sharedWith.add(id));
+      sharedWith.add(mediatorParty.id);
+    } else {
+      opposingSideIds.forEach((id) => sharedWith.delete(id));
+    }
+
+    return { ...doc, sharedWith: Array.from(sharedWith) };
+  });
+  logEvent('agreement.share.opposing', { docId, enabled });
 }
 
 function addSignature(docId, partyId, name) {
@@ -405,6 +450,25 @@ function renderAgreementWorkflow() {
   fileInput.accept = '.pdf,.doc,.docx,.txt';
   fileInput.required = true;
 
+  const uploaderSelect = document.createElement('select');
+  parties.forEach((party) => {
+    const option = document.createElement('option');
+    option.value = party.id;
+    option.textContent = `${party.name} (${party.role})`;
+    uploaderSelect.appendChild(option);
+  });
+
+  const visibilitySelect = document.createElement('select');
+  [
+    { value: 'side', label: 'Only visible to my side until shared' },
+    { value: 'mediator', label: 'Visible to mediator only (they can forward)' }
+  ].forEach(({ value, label }) => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    visibilitySelect.appendChild(option);
+  });
+
   const typeSelect = document.createElement('select');
   ['Settlement agreement', 'Mediator statement', 'Evidence/Other'].forEach((type) => {
     const option = document.createElement('option');
@@ -417,6 +481,8 @@ function renderAgreementWorkflow() {
   uploadButton.type = 'submit';
   uploadForm.append(
     createEl('div', 'stack grow', [createEl('label', 'label', ['Document']), fileInput, createEl('div', 'muted', ['Local-only preview; share controls below determine visibility.'])]),
+    createEl('div', 'stack', [createEl('label', 'label', ['Uploaded by']), uploaderSelect]),
+    createEl('div', 'stack', [createEl('label', 'label', ['Initial visibility']), visibilitySelect]),
     createEl('div', 'stack', [createEl('label', 'label', ['Type']), typeSelect]),
     createEl('div', 'stack align-end', [uploadButton])
   );
@@ -425,12 +491,17 @@ function renderAgreementWorkflow() {
     e.preventDefault();
     if (!fileInput.files?.length) return;
     const file = fileInput.files[0];
+    const owner = getParty(uploaderSelect.value) || parties[0];
+    const ownerSideIds = owner ? getSidePartyIds(owner.role) : [];
+    const sharedWith = new Set(ownerSideIds);
+    if (visibilitySelect.value === 'mediator' && mediatorParty) sharedWith.add(mediatorParty.id);
     const newDoc = {
       id: `doc-${Date.now()}`,
       name: file.name,
       type: typeSelect.value,
       uploadedAt: new Date().toISOString(),
-      sharedWith: parties.map((p) => p.id),
+      ownerPartyId: owner?.id,
+      sharedWith: Array.from(sharedWith),
       signatures: [],
       link: URL.createObjectURL(file)
     };
@@ -450,8 +521,14 @@ function renderAgreementWorkflow() {
 
 function renderDocumentCard(doc) {
   const wrapper = createEl('div', 'document-card');
+  const owner = doc.ownerPartyId ? getParty(doc.ownerPartyId) : null;
   const header = createEl('div', 'row space-between', [
-    createEl('div', 'stack', [createEl('strong', null, [doc.name]), createEl('span', 'muted', [`Uploaded ${formatDate(doc.uploadedAt)}`])]),
+    createEl('div', 'stack', [
+      createEl('strong', null, [doc.name]),
+      createEl('span', 'muted', [
+        `Uploaded ${formatDate(doc.uploadedAt)}${owner ? ` · ${owner.name} (${owner.role})` : ''}`
+      ])
+    ]),
     createEl('span', 'pill', [doc.type])
   ]);
   wrapper.appendChild(header);
@@ -466,22 +543,57 @@ function renderDocumentCard(doc) {
     wrapper.appendChild(createEl('div', 'row', [link, createEl('span', 'muted', ['Object URL retained in-memory only'])]));
   }
 
+  const ownerSideIds = owner ? getSidePartyIds(owner.role) : [];
+  const opposingSideIds = owner ? getOpposingSidePartyIds(owner.id) : [];
+  const mediatorHasAccess = mediatorParty ? doc.sharedWith.includes(mediatorParty.id) : false;
+  const opposingSideShared = opposingSideIds.length > 0 && opposingSideIds.every((id) => doc.sharedWith.includes(id));
+
   const shareRow = createEl('div', 'stack');
-  shareRow.appendChild(createEl('div', 'label', ['Share with parties']));
-  const partyToggles = createEl('div', 'party-share');
-  parties.forEach((party) => {
-    const label = createEl('label', 'pill-checkbox', [createEl('span', null, [`${party.name} (${party.role})`])]);
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = doc.sharedWith.includes(party.id);
-    checkbox.onchange = (e) => {
-      updateDocumentShare(doc.id, party.id, e.target.checked);
-      render();
-    };
-    label.insertBefore(checkbox, label.firstChild);
-    partyToggles.appendChild(label);
-  });
-  shareRow.appendChild(partyToggles);
+  shareRow.appendChild(createEl('div', 'label', ['Visibility pathway']));
+  const sharePath = createEl('div', 'share-path');
+  const ownerChip = createEl('div', `share-chip ${ownerSideIds.every((id) => doc.sharedWith.includes(id)) ? 'active' : ''}`, [
+    createEl('strong', null, ['Owner side']),
+    createEl('span', 'muted', [owner ? owner.role : 'Select owner'])
+  ]);
+  const mediatorChip = createEl('div', `share-chip ${mediatorHasAccess ? 'active' : 'inactive'}`, [
+    createEl('strong', null, ['Mediator']),
+    createEl('span', 'muted', [mediatorHasAccess ? 'Can view & coordinate' : 'Awaiting share'])
+  ]);
+  const opposingChip = createEl('div', `share-chip ${opposingSideShared ? 'active' : 'inactive'}`, [
+    createEl('strong', null, ['Other side']),
+    createEl('span', 'muted', [opposingSideShared ? 'Mediator shared' : 'Mediator gate required'])
+  ]);
+  [ownerChip, mediatorChip, opposingChip].forEach((chip) => sharePath.appendChild(chip));
+  shareRow.appendChild(sharePath);
+
+  const mediatorToggle = document.createElement('input');
+  mediatorToggle.type = 'checkbox';
+  mediatorToggle.checked = mediatorHasAccess;
+  mediatorToggle.onchange = (e) => {
+    setMediatorShare(doc.id, e.target.checked);
+    render();
+  };
+  const mediatorLabel = createEl('label', 'pill-checkbox', [mediatorToggle, createEl('span', null, ['Share with mediator'])]);
+  shareRow.appendChild(mediatorLabel);
+
+  const opposingToggle = document.createElement('input');
+  opposingToggle.type = 'checkbox';
+  opposingToggle.checked = opposingSideShared;
+  opposingToggle.disabled = !mediatorHasAccess;
+  opposingToggle.onchange = (e) => {
+    setOpposingSideShare(doc.id, e.target.checked);
+    render();
+  };
+  const opposingLabel = createEl('label', `pill-checkbox ${opposingToggle.disabled ? 'disabled' : ''}`, [
+    opposingToggle,
+    createEl('span', null, ['Mediator shares with other side'])
+  ]);
+  shareRow.appendChild(opposingLabel);
+  shareRow.appendChild(
+    createEl('div', 'muted', [
+      'Parties can keep documents private to their side, optionally involve the mediator, and the mediator decides when to release to the opposing side.'
+    ])
+  );
   wrapper.appendChild(shareRow);
 
   const signatureArea = createEl('div', 'signature-area');

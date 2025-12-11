@@ -2,6 +2,12 @@
 
 A static, RBAC-aware admin SPA prototype built directly from the guidance in `docs/admin_spa_plan.md`. It includes curated data for users, roles, orders, sessions, feature flags, and audit logs to demonstrate the core flows described in the plan (navigation, impersonation, RBAC-aware buttons, and observability panels).
 
+## Confidentiality and security
+
+Mediations and their outcomes are extremely confidential. All environments, configuration, and data used with this project must
+be protected with strong access controls, least-privilege credentials, and end-to-end encryption. Logs, screenshots, or sample
+data should never include real party names or case outcomes, and any shared assets must be scrubbed of identifying details.
+
 ## Running locally
 
 No build tooling is required. Serve the repository root with any static HTTP server (for example, `python -m http.server 4173`) and open `http://localhost:4173` in a browser.

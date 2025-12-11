@@ -1,5 +1,10 @@
 # Client Portal SSO Configuration Design
 
+## Confidentiality and security requirements
+- Mediations and their outcomes are extremely confidential. SSO configurations, tokens, and assertions must be handled as sensitive material with least-privilege access.
+- Enforce encryption in transit and at rest for IdP metadata, certificates, and secrets; restrict who can view or export authentication logs.
+- Do not include real party information or mediation outcomes in sign-in traces, screenshots, or support examples; rely on redacted fixtures.
+
 ## Goals & scope
 - Enable mediators and their staff to authenticate into the client portal via enterprise SSO providers while preserving per-organization isolation and auditability.
 - Support both standard enterprise identity providers (e.g., Okta/AzureAD/GSuite via OIDC/SAML) and custom-configured IdPs for unique mediator organizations.

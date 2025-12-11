@@ -1,5 +1,10 @@
 # Virtual Mediation Platform Plan
 
+## Confidentiality and security posture
+- Mediations and their outcomes are extremely confidential; all system components must preserve privacy by design.
+- Enforce strict access controls, encryption, and tenant isolation across portals, APIs, storage, media paths, and observability pipelines.
+- Redact or anonymize any mediation details when creating logs, metrics, demos, or support artifacts; treat recordings and transcripts as highly sensitive evidence.
+
 ## High-Level Architecture
 - **Client applications**
   - **Admin portal (web)**: case intake, mediator assignment, compliance, billing, and operational dashboards.

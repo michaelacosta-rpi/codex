@@ -1,5 +1,10 @@
 # virtual mediation hosting — Brand Guide
 
+## Confidentiality and security principles
+- Mediations and their outcomes are extremely confidential; all messaging and visuals should reinforce privacy and discretion.
+- Avoid showing real names, case details, or outcome hints in copy, screenshots, or mockups; use anonymized placeholders.
+- When sharing design artifacts, ensure source files and exports exclude any metadata or overlays that could reveal sensitive mediation information.
+
 ## Brand essence
 - **Design ethos:** Clean, clear, concise experiences that reduce friction and earn trust.
 - **Personality:** Calm, confident, and empathetic; speaks plainly and avoids jargon.

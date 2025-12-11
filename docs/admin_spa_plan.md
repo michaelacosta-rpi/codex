@@ -2,6 +2,11 @@
 
 This document outlines a detailed plan for building an admin single-page application that covers user administration, sales management, and session oversight. It includes role-based access control (RBAC), audit logging, and feature flags, alongside proposed API endpoints, database tables, and test coverage.
 
+## Confidentiality and security expectations
+- Mediations and their outcomes are extremely confidential; treat all related case data, recordings, and transcripts as highly sensitive.
+- Production and test environments must enforce strict access controls, encryption in transit and at rest, and audit logging for every privileged action.
+- Never include real party names, case identifiers, or outcome details in demos, logs, screenshots, or documentation; use anonymized fixtures instead.
+
 ## Containerized local stack
 - **Admin**: this SPA served from the repository image.
 - **Client**: companion SPA container for end-user flows.

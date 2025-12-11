@@ -4,6 +4,11 @@ The admin SPA exposes lightweight telemetry primitives in `src/telemetry.js` so 
 analytics tools without rewriting UI components. Events and metrics are still logged to the console and stored in memory, but you
 can now register sinks that relay payloads to trackers such as Amplitude or FullStory.
 
+## Confidentiality and security reminders
+- Mediations and their outcomes are extremely confidential. Do not emit party names, case identifiers, transcripts, or outcome details in telemetry payloads.
+- Ensure telemetry sinks transmit over encrypted channels, strip or hash identifiers where possible, and respect least-privilege access to downstream analytics tools.
+- Default sinks and custom handlers should favor anonymized event properties and avoid persisting raw media or chat content.
+
 ## Core APIs
 
 - `logEvent(name, detail, context)` — records a timestamped event and dispatches it to all registered sinks.

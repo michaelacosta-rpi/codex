@@ -12,6 +12,11 @@ const routes = [
 
 const optionalRoles = ['Carrier', 'Counsel', 'Defendant', 'Plaintiff'];
 const partySides = ['Plaintiff', 'Defendant'];
+const defaultBreakoutTemplates = [
+  { id: 'brk-default-plaintiff', name: 'Plaintiff' },
+  { id: 'brk-default-defendant', name: 'Defendant' },
+  { id: 'brk-default-mediator', name: 'Mediator' }
+];
 
 const state = {
   loading: true,
@@ -46,7 +51,7 @@ const state = {
     messageDraft: '',
     messageRecipients: ['all'],
     messageError: null,
-    breakoutRooms: [],
+    breakoutRooms: createDefaultBreakoutRooms(),
     breakoutName: '',
     breakoutSelection: [],
     breakoutError: null
@@ -807,7 +812,7 @@ function renderBreakoutManager(session) {
 
   card.appendChild(
     createEl('p', 'muted', [
-      'Create additional caucus rooms on demand and decide exactly which participants to move. Changes are tracked for the live session.'
+      'Plaintiff, Defendant, and Mediator breakouts are always available. Create additional caucus rooms on demand or ahead of the session through the client portal.'
     ])
   );
 
@@ -1352,14 +1357,39 @@ function createWaitingEntry({ name, side, expiresAt, role }) {
   };
 }
 
+function createDefaultBreakoutRooms(baseTime = Date.now()) {
+  return defaultBreakoutTemplates.map((room, index) => ({
+    id: room.id,
+    name: room.name,
+    participants: [],
+    createdAt: baseTime - (index + 1) * 15 * 60 * 1000
+  }));
+}
+
 function normalizeBreakoutRooms(session = {}) {
-  const rooms = session.breakoutRooms || [];
-  return rooms.map((room, index) => ({
+  const now = Date.now();
+  const providedRooms = session.breakoutRooms || [];
+  const normalizedProvided = providedRooms.map((room, index) => ({
     id: room.id || `brk-seed-${index}`,
     name: room.name || `Breakout ${index + 1}`,
     participants: (room.participants || []).filter(Boolean),
-    createdAt: room.createdAt || Date.now() - (index + 1) * 15 * 60 * 1000
+    createdAt: room.createdAt || now - (index + 1) * 15 * 60 * 1000
   }));
+
+  const reservedNames = new Set(defaultBreakoutTemplates.map((room) => room.name.toLowerCase()));
+  const defaultRooms = createDefaultBreakoutRooms(now).map((baseRoom) => {
+    const match = normalizedProvided.find((room) => room.name.toLowerCase() === baseRoom.name.toLowerCase());
+    if (!match) return baseRoom;
+    return {
+      ...match,
+      id: match.id || baseRoom.id,
+      name: baseRoom.name,
+      createdAt: match.createdAt || baseRoom.createdAt
+    };
+  });
+
+  const additionalRooms = normalizedProvided.filter((room) => !reservedNames.has(room.name.toLowerCase()));
+  return [...defaultRooms, ...additionalRooms];
 }
 
 function createDefaultSummons(session = {}) {

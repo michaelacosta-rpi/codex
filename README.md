@@ -27,6 +27,8 @@ The portal can be deployed as a five-container stack to mirror the broader syste
 - **Video hosting service**: placeholder HTTP service representing the media backend.
 - **Database**: PostgreSQL for development data.
 
+The admin and client portals now rely on the shared PostgreSQL instance for user identity data. The client API exposes helper endpoints so that users created from the admin side can immediately access the client portal when tagged for that surface.
+
 ### Build and run the container
 
 ```
@@ -51,6 +53,12 @@ The compose file exposes:
 - Client API at `http://localhost:4176/api/client`.
 - Video hosting service placeholder at `http://localhost:4175`.
 - PostgreSQL database on port `5432` with default credentials for local development.
+
+### Client API endpoints for shared users
+
+- `POST /api/client/users` — create or update a user record with `email`, `name`, and a `portals` array (e.g., `['admin', 'client']`).
+- `POST /api/client/login` — validate that a user exists and has `client` access; returns the portals attached to the account.
+- `GET /api/client/health` — confirms connectivity to the backing PostgreSQL instance.
 
 Replace the placeholder images for the video service and database with your production equivalents as needed.
 

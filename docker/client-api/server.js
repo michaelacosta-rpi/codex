@@ -1,4 +1,6 @@
 const http = require('node:http');
+const { URL } = require('node:url');
+const { Pool } = require('pg');
 
 const PORT = process.env.PORT || 8080;
 const HOST = '0.0.0.0';
@@ -7,6 +9,66 @@ const basePath = '/api/client';
 const json = (res, status, payload) => {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(payload));
+};
+
+const normalizeEmail = (email) => email?.trim().toLowerCase();
+
+const databaseUrl =
+  process.env.DATABASE_URL ||
+  `postgres://${process.env.DATABASE_USER || 'codex'}:${process.env.DATABASE_PASSWORD || 'codex'}@${
+    process.env.DATABASE_HOST || 'database'
+  }:${process.env.DATABASE_PORT || 5432}/${process.env.DATABASE_NAME || 'codex'}`;
+
+const pool = new Pool({
+  connectionString: databaseUrl,
+  max: 5,
+  idleTimeoutMillis: 30_000
+});
+
+const ensureSchemaAndSeed = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS portal_users (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      full_name TEXT NOT NULL,
+      portals TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM portal_users;');
+  if (rows[0].count > 0) return;
+
+  await pool.query(
+    `INSERT INTO portal_users (email, full_name, portals)
+     VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)
+     ON CONFLICT (email) DO NOTHING;`,
+    [
+      'ava@codex.io',
+      'Ava Winters',
+      ['admin', 'client'],
+      'sam.sales@codex.io',
+      'Sam Carter',
+      ['admin'],
+      'client@sierra-glass.example',
+      'Sierra Glass Client',
+      ['client']
+    ]
+  );
+};
+
+const readJsonBody = async (req) => {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  if (!chunks.length) return {};
+
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch (error) {
+    throw new Error('Invalid JSON payload');
+  }
 };
 
 const data = {
@@ -123,26 +185,115 @@ const data = {
 };
 
 const routes = {
-  [`${basePath}/profile`]: () => ({ status: 200, body: data.profile }),
-  [`${basePath}/library`]: () => ({ status: 200, body: data.library }),
-  [`${basePath}/invoices`]: () => ({ status: 200, body: data.invoices }),
-  [`${basePath}/support`]: () => ({ status: 200, body: data.support }),
-  [`${basePath}/timeline`]: () => ({ status: 200, body: data.timeline }),
-  [`${basePath}/video-sessions`]: () => ({ status: 200, body: data.videoSessions }),
-  [`${basePath}/health`]: () => ({ status: 200, body: { status: 'ok' } })
+  GET: {
+    [`${basePath}/profile`]: () => ({ status: 200, body: data.profile }),
+    [`${basePath}/library`]: () => ({ status: 200, body: data.library }),
+    [`${basePath}/invoices`]: () => ({ status: 200, body: data.invoices }),
+    [`${basePath}/support`]: () => ({ status: 200, body: data.support }),
+    [`${basePath}/timeline`]: () => ({ status: 200, body: data.timeline }),
+    [`${basePath}/video-sessions`]: () => ({ status: 200, body: data.videoSessions })
+  }
 };
 
-const server = http.createServer((req, res) => {
-  const handler = routes[req.url];
+const findUserByEmail = async (email) => {
+  if (!email) return null;
+  const { rows } = await pool.query(
+    'SELECT email, full_name AS name, portals FROM portal_users WHERE email = $1 LIMIT 1;',
+    [normalizeEmail(email)]
+  );
+  return rows[0] || null;
+};
+
+const createOrUpdateUser = async ({ email, name, portals }) => {
+  if (!email || !name) {
+    throw new Error('Both email and name are required');
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPortals = Array.isArray(portals) && portals.length ? portals : ['client'];
+
+  const { rows } = await pool.query(
+    `INSERT INTO portal_users (email, full_name, portals)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name, portals = EXCLUDED.portals
+     RETURNING email, full_name AS name, portals;`,
+    [normalizedEmail, name, normalizedPortals]
+  );
+
+  return rows[0];
+};
+
+const server = http.createServer(async (req, res) => {
+  const { pathname } = new URL(req.url, `http://${req.headers.host}`);
+  const method = req.method.toUpperCase();
+
+  if (method === 'POST' && pathname === `${basePath}/users`) {
+    try {
+      const body = await readJsonBody(req);
+      const user = await createOrUpdateUser(body);
+      json(res, 201, { user });
+    } catch (error) {
+      console.error('[client-api] failed to save user', error.message);
+      json(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (method === 'POST' && pathname === `${basePath}/login`) {
+    try {
+      const body = await readJsonBody(req);
+      const user = await findUserByEmail(body.email);
+      if (!user) {
+        json(res, 404, { error: 'User not found' });
+        return;
+      }
+
+      if (!user.portals.includes('client')) {
+        json(res, 403, { error: 'User does not have client portal access' });
+        return;
+      }
+
+      json(res, 200, { message: 'Login permitted', user });
+    } catch (error) {
+      console.error('[client-api] login error', error.message);
+      json(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (method === 'GET' && pathname === `${basePath}/health`) {
+    try {
+      await pool.query('SELECT 1;');
+      json(res, 200, { status: 'ok', database: 'connected' });
+    } catch (error) {
+      console.error('[client-api] health check failed', error.message);
+      json(res, 503, { status: 'degraded', error: 'database unreachable' });
+    }
+    return;
+  }
+
+  const handler = routes[method]?.[pathname];
   if (!handler) {
     json(res, 404, { error: 'Not found' });
     return;
   }
 
-  const { status, body } = handler();
-  json(res, status, body);
+  try {
+    const { status, body } = await handler();
+    json(res, status, body);
+  } catch (error) {
+    console.error('[client-api] unexpected error', error.message);
+    json(res, 500, { error: 'Internal server error' });
+  }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`[client-api] listening on http://${HOST}:${PORT}${basePath}`);
-});
+ensureSchemaAndSeed()
+  .then(() => {
+    server.listen(PORT, HOST, () => {
+      console.log(`[client-api] listening on http://${HOST}:${PORT}${basePath}`);
+    });
+  })
+  .catch((error) => {
+    console.error('[client-api] failed to initialize database', error.message);
+    process.exit(1);
+  });

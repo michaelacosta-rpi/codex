@@ -32,8 +32,12 @@ services:
     build: ./docker/client-api
     image: codex-client-api:latest
     container_name: codex-client-api
+    environment:
+      DATABASE_URL: postgres://codex:codex@database:5432/codex
     ports:
       - "4176:8080"
+    depends_on:
+      - database
 
   video-hosting-service:
     image: nginx:1.27-alpine

@@ -40,7 +40,10 @@ const state = {
     invitationError: null,
     invitationStatus: null,
     pendingInvites: [],
-    guestRole: ''
+    guestRole: '',
+    breakoutRooms: [],
+    newBreakoutName: '',
+    breakoutError: null
   }
 };
 
@@ -87,7 +90,10 @@ async function hydrate() {
         invitationError: null,
         invitationStatus: null,
         pendingInvites: [],
-        guestRole: ''
+        guestRole: '',
+        breakoutRooms: primarySession.breakoutRooms || [],
+        newBreakoutName: '',
+        breakoutError: null
       };
     }
   } catch (err) {
@@ -495,6 +501,7 @@ function renderVideoPortal() {
   layout.appendChild(guestCard);
   layout.appendChild(waitingCard);
   layout.appendChild(rosterCard);
+  layout.appendChild(renderBreakoutManager(session));
   layout.appendChild(renderMeetingAdminCard(editable));
   layout.appendChild(mediatorCard);
   return layout;
@@ -1059,6 +1066,100 @@ function renderWaitingRoom(session) {
   return waitingList;
 }
 
+function renderBreakoutManager(session) {
+  const card = createEl('div', 'card');
+  card.appendChild(
+    createEl('div', 'section-header', [createEl('h3', null, ['Breakout rooms & caucuses']), createEl('span', 'badge success', ['Mediator-controlled'])])
+  );
+
+  card.appendChild(
+    createEl('p', 'muted', [
+      'Spin up additional breakout rooms at any time and choose which authenticated parties are routed into each caucus.'
+    ])
+  );
+
+  const formRow = createEl('div', 'row');
+  const nameInput = createEl('input');
+  nameInput.type = 'text';
+  nameInput.placeholder = 'Room name (e.g., Plaintiff caucus)';
+  nameInput.value = state.videoUi.newBreakoutName;
+  nameInput.oninput = (e) => updateBreakoutField('newBreakoutName', e.target.value);
+
+  const addButton = createEl('button', 'button outline', ['Create breakout room']);
+  addButton.onclick = addBreakoutRoom;
+  formRow.appendChild(nameInput);
+  formRow.appendChild(addButton);
+
+  const helperRow = createEl('div', 'muted small', ['Rooms open instantly; mediator selects which parties to send.']);
+  card.appendChild(formRow);
+  card.appendChild(helperRow);
+
+  if (state.videoUi.breakoutError) {
+    card.appendChild(createEl('div', 'notice warning', [state.videoUi.breakoutError]));
+  }
+
+  const rooms = state.videoUi.breakoutRooms || [];
+  const participants = session.participants || [];
+  const list = createEl('div', 'breakout-list');
+
+  if (!rooms.length) {
+    list.appendChild(
+      createEl('div', 'notice muted', [
+        'No breakout rooms yet. Create a caucus and select who should join from the participant roster.'
+      ])
+    );
+  }
+
+  rooms.forEach((room) => {
+    const roomWrapper = createEl('div', 'breakout-room');
+    roomWrapper.appendChild(
+      createEl('div', 'breakout-header', [
+        createEl('div', 'stack', [createEl('strong', null, [room.name || 'Breakout room']), createEl('span', 'muted', [room.createdBy || 'Mediator'])]),
+        createEl('span', 'pill soft', [`${(room.participants || []).length} participant(s)`])
+      ])
+    );
+
+    const assigned = createEl('div', 'pill-row');
+    if (room.participants?.length) {
+      room.participants.forEach((name) => assigned.appendChild(createEl('span', 'pill', [name])));
+    } else {
+      assigned.appendChild(createEl('span', 'pill soft', ['No one assigned yet']));
+    }
+
+    const assignRow = createEl('div', 'breakout-body');
+    assignRow.appendChild(createEl('div', 'stack', [createEl('span', 'muted', ['Select parties for this room']), assigned]));
+
+    const checkboxGrid = createEl('div', 'checkbox-grid');
+    if (!participants.length) {
+      checkboxGrid.appendChild(createEl('div', 'muted small', ['Participants will appear here after verification.']));
+    }
+
+    participants.forEach((participant) => {
+      const label = createEl('label', 'checkbox-pill');
+      const input = createEl('input');
+      input.type = 'checkbox';
+      input.checked = !!room.participants?.includes(participant.name);
+      input.onchange = () => toggleBreakoutParticipant(room.id, participant.name);
+
+      const text = createEl('div', 'stack', [
+        createEl('strong', null, [participant.name || 'Participant']),
+        createEl('span', 'muted small', [participant.designation || 'Role'])
+      ]);
+
+      label.appendChild(input);
+      label.appendChild(text);
+      checkboxGrid.appendChild(label);
+    });
+
+    assignRow.appendChild(checkboxGrid);
+    roomWrapper.appendChild(assignRow);
+    list.appendChild(roomWrapper);
+  });
+
+  card.appendChild(list);
+  return card;
+}
+
 function updateVideoSetting(key, value) {
   state.videoUi = { ...state.videoUi, [key]: value };
   render();
@@ -1066,6 +1167,47 @@ function updateVideoSetting(key, value) {
 
 function updateCoMediatorField(key, value) {
   state.videoUi = { ...state.videoUi, [key]: value, coMediatorError: null };
+  render();
+}
+
+function updateBreakoutField(key, value) {
+  state.videoUi = { ...state.videoUi, [key]: value, breakoutError: null };
+  render();
+}
+
+function addBreakoutRoom() {
+  const name = (state.videoUi.newBreakoutName || '').trim();
+  if (!name) {
+    updateBreakoutField('breakoutError', 'A name is required to create a breakout room.');
+    return;
+  }
+
+  const newRoom = {
+    id: `br-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    participants: [],
+    createdBy: 'Mediator'
+  };
+
+  state.videoUi = {
+    ...state.videoUi,
+    breakoutRooms: [...(state.videoUi.breakoutRooms || []), newRoom],
+    newBreakoutName: '',
+    breakoutError: null
+  };
+  render();
+}
+
+function toggleBreakoutParticipant(roomId, participantName) {
+  const rooms = (state.videoUi.breakoutRooms || []).map((room) => {
+    if (room.id !== roomId) return room;
+    const current = room.participants || [];
+    const exists = current.includes(participantName);
+    const participants = exists ? current.filter((name) => name !== participantName) : [...current, participantName];
+    return { ...room, participants };
+  });
+
+  state.videoUi = { ...state.videoUi, breakoutRooms: rooms };
   render();
 }
 

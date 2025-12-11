@@ -39,6 +39,14 @@ const fallbackVideoSessions = [
         addedBy: 'Case intake automation'
       }
     ],
+    breakoutRooms: [
+      {
+        id: 'br-1',
+        name: 'Policyholder caucus',
+        participants: ['Dana Johnson', 'Leah Kim'],
+        createdBy: 'Mediator'
+      }
+    ],
     sides: [
       {
         label: 'Policyholder side',

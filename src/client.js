@@ -18,6 +18,7 @@ const state = {
     accessPolicy: 'verified',
     verificationMethod: 'magic_link',
     cacheMinutes: 30,
+    meetingAdmins: [],
     guestName: '',
     guestSide: '',
     guestError: null,
@@ -25,7 +26,11 @@ const state = {
     waitingEntries: [],
     verifiedGuests: [],
     cameraCovered: false,
-    remindVideoOn: true
+    remindVideoOn: true,
+    coMediatorName: '',
+    coMediatorEmail: '',
+    coMediatorNotes: '',
+    coMediatorError: null
   }
 };
 
@@ -53,6 +58,7 @@ async function hydrate() {
         accessPolicy: primarySession.accessPolicy || 'verified',
         verificationMethod: primarySession.verificationMethod || 'magic_link',
         cacheMinutes: primarySession.cacheMinutes || 30,
+        meetingAdmins: primarySession.meetingAdmins || [],
         guestName: '',
         guestSide: primarySession.sides?.[0]?.label || '',
         guestError: null,
@@ -60,7 +66,11 @@ async function hydrate() {
         waitingEntries: normalizeWaitingEntries(primarySession.sides || []),
         verifiedGuests: [],
         cameraCovered: false,
-        remindVideoOn: true
+        remindVideoOn: true,
+        coMediatorName: '',
+        coMediatorEmail: '',
+        coMediatorNotes: '',
+        coMediatorError: null
       };
     }
   } catch (err) {
@@ -467,8 +477,133 @@ function renderVideoPortal() {
   layout.appendChild(guestCard);
   layout.appendChild(waitingCard);
   layout.appendChild(rosterCard);
+  layout.appendChild(renderMeetingAdminCard(editable));
   layout.appendChild(mediatorCard);
   return layout;
+}
+
+function renderMeetingAdminCard(editable) {
+  const card = createEl('div', 'card');
+  card.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Meeting admins & co-mediators']),
+      createEl('span', 'badge success', ['Host-level permissions'])
+    ])
+  );
+
+  card.appendChild(
+    createEl('p', 'muted', [
+      "Mediators or their staff can delegate full host controls to a trusted co-mediator. Added admins inherit the host mediator's permissions for admission, breakouts, recordings, and removals."
+    ])
+  );
+
+  const list = createEl('div', 'co-admin-list');
+  if (!state.videoUi.meetingAdmins.length) {
+    list.appendChild(createEl('div', 'notice muted', ['No meeting admins yet. Add a co-mediator to share hosting duties.']));
+  }
+
+  state.videoUi.meetingAdmins.forEach((admin) => {
+    const badgeRow = createEl('div', 'pill-row');
+    badgeRow.appendChild(createEl('span', 'pill', ['Full host controls']));
+    badgeRow.appendChild(createEl('span', 'pill', [admin.designation || 'Co-mediator']));
+    if (admin.addedBy) {
+      badgeRow.appendChild(createEl('span', 'pill soft', [`Added by ${admin.addedBy}`]));
+    }
+
+    const detail = createEl('div', 'stack', [
+      createEl('strong', null, [admin.name || 'Meeting admin']),
+      createEl('span', 'muted', [admin.email || 'Email pending']),
+      badgeRow,
+      createEl('div', 'muted small', [
+        `Permissions: ${(admin.permissions || ['Admission', 'Breakouts', 'Recording', 'Removal']).join(', ')}`
+      ])
+    ]);
+
+    const avatar = createEl('div', 'avatar host', [admin.name?.[0] || 'A']);
+    list.appendChild(createEl('div', 'co-admin-row', [avatar, detail]));
+  });
+
+  card.appendChild(list);
+
+  const form = createEl('div', 'co-admin-form stack');
+  form.appendChild(createEl('h4', null, ['Add a co-mediator']));
+  form.appendChild(
+    createEl('p', 'muted', [
+      editable
+        ? 'Share hosting with a second mediator or staff member. They will receive the same meeting-level permissions.'
+        : 'Meeting has started. Adding co-mediators is locked until the next session.'
+    ])
+  );
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.placeholder = 'Full name';
+  nameInput.value = state.videoUi.coMediatorName;
+  nameInput.disabled = !editable;
+  nameInput.oninput = (e) => updateCoMediatorField('coMediatorName', e.target.value);
+
+  const emailInput = document.createElement('input');
+  emailInput.type = 'email';
+  emailInput.placeholder = 'Work email';
+  emailInput.value = state.videoUi.coMediatorEmail;
+  emailInput.disabled = !editable;
+  emailInput.oninput = (e) => updateCoMediatorField('coMediatorEmail', e.target.value);
+
+  const notesInput = document.createElement('textarea');
+  notesInput.placeholder = 'Optional: role, staffing notes, or why they need host rights';
+  notesInput.rows = 2;
+  notesInput.value = state.videoUi.coMediatorNotes;
+  notesInput.disabled = !editable;
+  notesInput.oninput = (e) => updateCoMediatorField('coMediatorNotes', e.target.value);
+
+  const addButton = createEl('button', 'button primary', ['Add co-mediator']);
+  addButton.disabled = !editable;
+  addButton.onclick = () => addCoMediator();
+
+  const actionRow = createEl('div', 'row', [addButton]);
+  actionRow.appendChild(
+    createEl('span', 'muted small', ['Host rights include admission, breakout control, recordings, and removing participants.'])
+  );
+
+  form.appendChild(nameInput);
+  form.appendChild(emailInput);
+  form.appendChild(notesInput);
+  form.appendChild(actionRow);
+
+  if (state.videoUi.coMediatorError) {
+    form.appendChild(createEl('div', 'notice warning', [state.videoUi.coMediatorError]));
+  }
+
+  card.appendChild(form);
+  return card;
+}
+
+function addCoMediator() {
+  const name = (state.videoUi.coMediatorName || '').trim();
+  const email = (state.videoUi.coMediatorEmail || '').trim();
+
+  if (!name || !email) {
+    updateVideoSetting('coMediatorError', 'Name and email are required to grant host-level permissions.');
+    return;
+  }
+
+  const designation = (state.videoUi.coMediatorNotes || '').trim() || 'Co-mediator';
+  const permissions = ['Admission', 'Breakouts', 'Recording', 'Removal'];
+  const nextMeetingAdmins = [
+    ...state.videoUi.meetingAdmins,
+    { name, email, designation, permissions, addedBy: 'Mediator or staff' }
+  ];
+
+  state.videoUi = {
+    ...state.videoUi,
+    meetingAdmins: nextMeetingAdmins,
+    coMediatorName: '',
+    coMediatorEmail: '',
+    coMediatorNotes: '',
+    coMediatorError: null
+  };
+
+  render();
 }
 
 function handleGuestJoin(session) {
@@ -681,6 +816,11 @@ function renderWaitingRoom(session) {
 
 function updateVideoSetting(key, value) {
   state.videoUi = { ...state.videoUi, [key]: value };
+  render();
+}
+
+function updateCoMediatorField(key, value) {
+  state.videoUi = { ...state.videoUi, [key]: value, coMediatorError: null };
   render();
 }
 

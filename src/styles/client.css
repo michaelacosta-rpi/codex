@@ -596,6 +596,99 @@ button:focus-visible {
   align-items: center;
 }
 
+.messaging-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summon-panel {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: rgba(31, 111, 235, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summon-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summon-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+}
+
+.avatar.summon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1f6feb, #5fb3ff);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.summon-simulation {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messaging-console {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recipient-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recipient-grid .pill-checkbox {
+  gap: 6px;
+}
+
+.messaging-compose textarea {
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  padding: 10px;
+  resize: vertical;
+}
+
+.message-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: var(--panel-strong);
+  box-shadow: 0 8px 18px rgba(13, 28, 46, 0.08);
+}
+
+.message-body {
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
 @media (max-width: 768px) {
   .client-hero,
   .navbar,

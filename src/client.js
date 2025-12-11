@@ -133,31 +133,86 @@ function render() {
   app.innerHTML = '';
   app.appendChild(renderBackdrop());
 
+  const shell = createEl('div', 'client-shell');
+  shell.appendChild(renderSidebar());
+
   if (state.loading) {
-    app.appendChild(renderLoading());
+    shell.appendChild(renderMainShell(renderLoading()));
+    app.appendChild(shell);
     return;
   }
 
   if (state.error) {
-    app.appendChild(renderError());
+    shell.appendChild(renderMainShell(renderError()));
+    app.appendChild(shell);
     return;
   }
 
-  app.appendChild(renderHero());
-  app.appendChild(renderNav());
-  app.appendChild(renderContent());
+  shell.appendChild(renderMain());
+  app.appendChild(shell);
 }
 
 function renderBackdrop() {
   return createEl('div', 'client-backdrop');
 }
 
+function getActiveRoute() {
+  const routeKey = getRoute();
+  return routes.find((r) => r.path === routeKey) || routes[0];
+}
+
+function renderMainShell(innerContent) {
+  const main = createEl('main', 'main');
+  const activeRoute = getActiveRoute();
+  const crumbs = createEl('div', 'breadcrumbs', [createEl('span', null, ['Home']), createEl('span', null, [activeRoute.label])]);
+  const actions = createEl('div', 'topbar-actions', [createEl('div', 'chip soft', [`Admin portal: ${adminPortalOrigin}`]), renderUserMenu()]);
+  const topbar = createEl('div', 'topbar', [crumbs, actions]);
+
+  main.appendChild(topbar);
+  main.appendChild(createEl('div', 'content', [innerContent]));
+  return main;
+}
+
+function renderSidebar() {
+  const sidebar = createEl('aside', 'sidebar');
+  const brand = createEl('div', 'brand', ['virtual mediation hosting', createEl('span', 'chip', ['client'])]);
+  sidebar.appendChild(brand);
+
+  sidebar.appendChild(renderNav());
+
+  const user = getClientUserSettings();
+  const profile = createEl('div', 'stack');
+  profile.appendChild(createEl('div', 'nav-title', ['Account']));
+  profile.appendChild(createEl('div', 'muted', [`Signed in as ${user.name}`]));
+  profile.appendChild(createEl('div', 'chip soft', [user.email]));
+  sidebar.appendChild(profile);
+
+  return sidebar;
+}
+
+function renderMain() {
+  const main = createEl('main', 'main');
+  const activeRoute = getActiveRoute();
+  const crumbs = createEl('div', 'breadcrumbs', [createEl('span', null, ['Home']), createEl('span', null, [activeRoute.label])]);
+  const actions = createEl('div', 'topbar-actions', [createEl('div', 'chip soft', [`Admin portal: ${adminPortalOrigin}`]), renderUserMenu()]);
+  const topbar = createEl('div', 'topbar', [crumbs, actions]);
+  main.appendChild(topbar);
+
+  const content = createEl('div', 'content');
+  if (!getRoute()) {
+    content.appendChild(renderHero());
+  }
+  content.appendChild(renderContent());
+  main.appendChild(content);
+  return main;
+}
+
 function renderLoading() {
   const shell = createEl('div', 'card shell');
-  shell.appendChild(createEl('div', 'shimmer title')); 
-  shell.appendChild(createEl('div', 'shimmer body')); 
-  shell.appendChild(createEl('div', 'shimmer body long')); 
-  return createEl('div', 'client-layout', [shell]);
+  shell.appendChild(createEl('div', 'shimmer title'));
+  shell.appendChild(createEl('div', 'shimmer body'));
+  shell.appendChild(createEl('div', 'shimmer body long'));
+  return createEl('div', 'stack', [shell]);
 }
 
 function renderError() {
@@ -167,7 +222,7 @@ function renderError() {
     render();
   };
 
-  return createEl('div', 'client-layout', [
+  return createEl('div', 'stack', [
     createEl('div', 'card error-card', [
       createEl('div', 'section-header', [createEl('h3', null, ['Unable to load portal']), createEl('span', 'badge warning', ['Service'])]),
       createEl('p', 'muted', ['Something went wrong while contacting the client API. Check connectivity or try again.']),
@@ -198,21 +253,53 @@ function renderHero() {
   return hero;
 }
 
+function getClientUserSettings() {
+  const profile = state.data?.profile || {};
+  return {
+    name: profile.contact || profile.company || 'Client contact',
+    email: profile.email || profile.contactEmail || 'Not set',
+    invitationName: profile.invitationName || profile.contact || profile.company || 'Not set',
+    organization: profile.company || 'Client workspace'
+  };
+}
+
+function renderUserMenu() {
+  const user = getClientUserSettings();
+  const menu = createEl('div', 'user-menu stack');
+  const meta = createEl('div', 'stack', [createEl('strong', null, [user.name]), createEl('span', 'muted', [user.email])]);
+  const settings = createEl('div', 'menu-section', [
+    createEl('div', 'menu-title', ['User settings']),
+    createEl('div', 'menu-row', [createEl('span', 'muted', ['Email']), createEl('span', null, [user.email])]),
+    createEl('div', 'menu-row', [createEl('span', 'muted', ['Name']), createEl('span', null, [user.name])]),
+    createEl('div', 'menu-row', [createEl('span', 'muted', ['Invitation display name']), createEl('span', null, [user.invitationName])])
+  ]);
+
+  const logout = createEl('button', 'button danger ghost', ['Logout']);
+  logout.onclick = () => alert('Simulated logout — wire to auth');
+
+  menu.appendChild(meta);
+  menu.appendChild(settings);
+  menu.appendChild(logout);
+  return menu;
+}
+
 function renderNav() {
-  const nav = createEl('div', 'navbar');
+  const navSection = createEl('div', 'nav-section');
+  navSection.appendChild(createEl('div', 'nav-title', ['Navigation']));
   const active = getRoute();
 
   routes.forEach((route) => {
-    const link = createEl('a', `nav-item ${route.path === active ? 'active' : ''}`.trim(), [route.label]);
+    const link = createEl('a', 'nav-item', [createEl('span', null, [route.label])]);
     link.href = `#/${route.path}`;
-    nav.appendChild(link);
+    if (route.path === active) link.classList.add('active');
+    navSection.appendChild(link);
   });
 
-  return nav;
+  return navSection;
 }
 
 function renderContent() {
-  const content = createEl('div', 'client-content');
+  const content = createEl('div', 'content');
   const route = getRoute();
 
   switch (route) {

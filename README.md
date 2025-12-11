@@ -6,6 +6,9 @@ A static, RBAC-aware admin SPA prototype built directly from the guidance in `do
 
 No build tooling is required. Serve the repository root with any static HTTP server (for example, `python -m http.server 4173`) and open `http://localhost:4173` in a browser.
 
+- **Admin portal**: `http://localhost:4173` (renders `index.html`).
+- **Client portal**: `http://localhost:4173/client.html` (renders the customer-facing experience built in `src/client.js`).
+
 ## Running with Docker
 
 The portal can be deployed as a four-container stack to mirror the broader system:

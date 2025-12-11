@@ -4,6 +4,7 @@ import { adminPortalOrigin } from './config.js';
 
 const routes = [
   { path: '', label: 'Overview' },
+  { path: 'mediations', label: 'Mediations' },
   { path: 'library', label: 'Library' },
   { path: 'billing', label: 'Billing' },
   { path: 'video', label: 'Video sessions' },
@@ -218,6 +219,9 @@ function renderContent() {
     case 'library':
       content.appendChild(renderLibrary());
       break;
+    case 'mediations':
+      content.appendChild(renderMediations());
+      break;
     case 'billing':
       content.appendChild(renderBilling());
       break;
@@ -266,6 +270,218 @@ function renderOverview() {
   wrapper.appendChild(section);
   wrapper.appendChild(guardrails);
   return wrapper;
+}
+
+function renderMediations() {
+  const mediations = state.data?.mediations || [];
+  const upcoming = mediations.filter((mediation) => mediation.timeframe === 'upcoming');
+  const past = mediations.filter((mediation) => mediation.timeframe !== 'upcoming');
+  const settledCount = mediations.filter((mediation) => mediation.settledInSession).length;
+  const pendingSignatureConfirmations = past.filter(
+    (mediation) => mediation.signaturesComplete && mediation.outcome !== 'Settled'
+  );
+
+  const grid = createEl('div', 'grid');
+
+  const trackingCard = createEl('div', 'card highlight');
+  trackingCard.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Mediation outcomes']),
+      createEl('span', 'badge success', [`${settledCount} settled during mediation`])
+    ])
+  );
+  trackingCard.appendChild(
+    createEl('p', 'muted', [
+      'Settlement tracking is driven by whether parties signed the mediator’s circulated document, followed by an explicit confirmation.'
+    ])
+  );
+  if (pendingSignatureConfirmations.length) {
+    const list = createEl('ul', 'list-stack');
+    pendingSignatureConfirmations.forEach((mediation) => {
+      const actionRow = createEl('div', 'pill-row');
+      actionRow.appendChild(createEl('span', 'pill success', ['Signatures collected']));
+      const confirmBtn = createEl('button', 'button primary small', ['Confirm settlement']);
+      confirmBtn.onclick = () => confirmSettlementFromSignatures(mediation.id);
+      actionRow.appendChild(confirmBtn);
+
+      list.appendChild(
+        createEl('li', 'list-item', [
+          createEl('div', 'stack', [createEl('strong', null, [mediation.name || 'Mediation']), createEl('span', 'muted', [
+            'Ready for settlement confirmation'
+          ])]),
+          actionRow
+        ])
+      );
+    });
+    trackingCard.appendChild(list);
+  }
+  grid.appendChild(trackingCard);
+
+  const upcomingCard = createEl('div', 'card');
+  upcomingCard.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Upcoming mediations']),
+      createEl('span', 'badge muted', [`${upcoming.length} scheduled`])
+    ])
+  );
+  upcomingCard.appendChild(renderMediationTable(upcoming, 'upcoming'));
+  grid.appendChild(upcomingCard);
+
+  const pastCard = createEl('div', 'card');
+  pastCard.appendChild(
+    createEl('div', 'section-header', [
+      createEl('h3', null, ['Past mediations']),
+      createEl('span', 'badge muted', ['Resolutions visible'])
+    ])
+  );
+  pastCard.appendChild(renderMediationTable(past, 'completed'));
+  grid.appendChild(pastCard);
+
+  return grid;
+}
+
+function renderMediationTable(items = [], mode = 'upcoming') {
+  const table = createEl('table', 'table');
+  const header = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  ['Mediation', 'Participants', mode === 'upcoming' ? 'Status' : 'Outcome'].forEach((heading) => {
+    const th = document.createElement('th');
+    th.textContent = heading;
+    headerRow.appendChild(th);
+  });
+  header.appendChild(headerRow);
+  table.appendChild(header);
+
+  const body = document.createElement('tbody');
+
+  if (!items.length) {
+    const emptyRow = document.createElement('tr');
+    const emptyCell = document.createElement('td');
+    emptyCell.colSpan = 3;
+    emptyCell.textContent = mode === 'upcoming' ? 'No mediations scheduled.' : 'No past mediations recorded yet.';
+    emptyCell.className = 'muted';
+    emptyRow.appendChild(emptyCell);
+    body.appendChild(emptyRow);
+    table.appendChild(body);
+    return table;
+  }
+
+  items.forEach((mediation) => {
+    const row = document.createElement('tr');
+    const nameCell = document.createElement('td');
+    nameCell.appendChild(createEl('strong', null, [mediation.name || 'Mediation']));
+    row.appendChild(nameCell);
+
+    const participantsCell = document.createElement('td');
+    participantsCell.textContent = (mediation.participants || []).join(', ') || '—';
+    row.appendChild(participantsCell);
+
+    const statusCell = document.createElement('td');
+    if (mode === 'upcoming') {
+      statusCell.appendChild(createEl('div', null, [formatMediationStatus(mediation)]));
+    } else {
+      statusCell.appendChild(renderOutcomeSelector(mediation));
+    }
+    row.appendChild(statusCell);
+
+    body.appendChild(row);
+  });
+
+  table.appendChild(body);
+  return table;
+}
+
+function formatMediationStatus(mediation) {
+  const inviteStatus = mediation.invitesSent ? 'Calendar invites sent' : 'Invites not sent yet';
+  const accepted = mediation.rsvp?.accepted ?? 0;
+  const total = mediation.rsvp?.total ?? mediation.participants?.length ?? 0;
+  const rsvpStatus = total ? `${accepted}/${total} RSVP’d` : 'RSVP tracking active';
+  const baseStatus = mediation.status || inviteStatus;
+  return `${baseStatus} — ${rsvpStatus}`;
+}
+
+function renderOutcomeSelector(mediation) {
+  const container = createEl('div', 'mediation-outcome');
+  const select = createEl('select', 'outcome-select');
+  const options = ['Settled', 'Pending confirmation', 'Unresolved', 'Continued', 'Cancelled'];
+  options.forEach((option) => {
+    const el = document.createElement('option');
+    el.value = option;
+    el.textContent = option;
+    select.appendChild(el);
+  });
+
+  if (mediation.outcome && !options.includes(mediation.outcome)) {
+    const custom = document.createElement('option');
+    custom.value = mediation.outcome;
+    custom.textContent = mediation.outcome;
+    select.appendChild(custom);
+  }
+
+  select.value = mediation.outcome || 'Pending confirmation';
+  select.onchange = (e) => handleOutcomeChange(mediation.id, e.target.value, e.target);
+  container.appendChild(select);
+
+  if (mediation.signaturesComplete && mediation.outcome !== 'Settled') {
+    const signatureRow = createEl('div', 'pill-row');
+    signatureRow.appendChild(createEl('span', 'pill success', ['Signatures collected']));
+    const confirmBtn = createEl('button', 'button outline small', ['Confirm settlement']);
+    confirmBtn.onclick = () => confirmSettlementFromSignatures(mediation.id);
+    signatureRow.appendChild(confirmBtn);
+    container.appendChild(signatureRow);
+  }
+
+  if (mediation.settledInSession) {
+    container.appendChild(createEl('div', 'pill-row', [createEl('span', 'pill success', ['Settled during mediation'])]));
+  }
+
+  return container;
+}
+
+function handleOutcomeChange(id, outcome, selectEl) {
+  const mediation = (state.data?.mediations || []).find((item) => item.id === id);
+  if (!mediation || mediation.outcome === outcome) return;
+
+  if (outcome === 'Settled') {
+    const confirmMessage = mediation.signaturesComplete
+      ? 'Parties have signed the circulated document. Confirm this mediation settled during the session?'
+      : 'Confirm this mediation settled during the session?';
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) {
+      if (selectEl) selectEl.value = mediation.outcome || 'Pending confirmation';
+      return;
+    }
+    updateMediationOutcome(id, outcome, mediation.signaturesComplete);
+    return;
+  }
+
+  updateMediationOutcome(id, outcome, false);
+}
+
+function confirmSettlementFromSignatures(id) {
+  const mediation = (state.data?.mediations || []).find((item) => item.id === id);
+  if (!mediation) return;
+  const confirmed = window.confirm(
+    'All parties signed the mediator’s document. Mark this mediation as settled during the session?'
+  );
+  if (!confirmed) return;
+  updateMediationOutcome(id, 'Settled', true);
+}
+
+function updateMediationOutcome(id, outcome, settledViaSignature) {
+  const mediations = (state.data?.mediations || []).map((mediation) => {
+    if (mediation.id !== id) return mediation;
+    const settledInSession = outcome === 'Settled' && (settledViaSignature || mediation.signaturesComplete);
+    return {
+      ...mediation,
+      outcome,
+      settlementConfirmed: outcome === 'Settled',
+      settledInSession
+    };
+  });
+
+  state.data = { ...state.data, mediations };
+  render();
 }
 
 function renderLibrary() {

@@ -23,13 +23,19 @@ The client portal reads live customer data from the configured client API origin
 - `GET /support`
 - `GET /timeline`
 
+The API also accepts writes so the portal can manage its own data source:
+
+- `POST /library` to create a new library entry.
+- `POST /support` to file a new support ticket.
+- `POST /timeline` to append a customer activity event.
+
 ## Running with Docker
 
 The portal can be deployed as a five-container stack to mirror the broader system:
 
 - **Admin**: a static SPA served by nginx (this repository).
 - **Client**: a companion SPA using the same base image.
-- **Client API**: mock JSON API for the client portal (`/api/client/*`).
+- **Client API**: JSON API for the client portal (`/api/client/*`) backed by PostgreSQL and the video hosting service.
 - **Video hosting service**: purpose-built mediation video host with APIs for session lifecycle, invites, and join token issuance.
 - **Database**: PostgreSQL for development data.
 
@@ -49,13 +55,13 @@ Make sure Docker and Docker Compose are available on your machine ([Docker insta
 
    `ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA references for admin communication (defaults to `http://admin:4173`). The same image powers the client-facing portal when paired with the client nginx config in `docker/nginx.client.conf`.
 
-2. **Client API** (mock API for the client portal):
+2. **Client API** (production-like API for the client portal):
 
    ```
    docker build -t codex-client-api:latest ./docker/client-api
    ```
 
-   The Dockerfile installs production dependencies and exposes port `8080` inside the container. Configure service connectivity through `DATABASE_URL` and `VIDEO_SERVICE_URL` (the compose file wires these automatically).
+   The Dockerfile installs production dependencies and exposes port `8080` inside the container. The API persists data in PostgreSQL (including profile, library, invoice, support, and timeline records) and automatically seeds sample content on startup if the tables are empty. Configure service connectivity through `DATABASE_URL` and `VIDEO_SERVICE_URL` (the compose file wires these automatically).
 
 3. **Video hosting service** (demo mediation video backend):
 

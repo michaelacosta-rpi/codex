@@ -1,9 +1,8 @@
 node_modules
 npm-debug.log
 *.log
-.dockerignore
-Dockerfile
 .env
+# Exclude docker build artifacts
 **/node_modules
 **/.env
 **/npm-debug.log

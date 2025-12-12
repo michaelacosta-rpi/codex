@@ -1,4 +1,5 @@
 const http = require('node:http');
+const { randomUUID } = require('node:crypto');
 const { URL } = require('node:url');
 const { Pool } = require('pg');
 
@@ -36,27 +37,150 @@ const ensureSchemaAndSeed = async () => {
       portals TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS portal_profile (
+      id SERIAL PRIMARY KEY,
+      company TEXT NOT NULL,
+      contact TEXT NOT NULL,
+      email TEXT NOT NULL,
+      success_manager TEXT NOT NULL,
+      plan TEXT NOT NULL,
+      support_level TEXT NOT NULL,
+      renewal_date TIMESTAMPTZ NOT NULL,
+      seats_used INTEGER NOT NULL,
+      seats_total INTEGER NOT NULL,
+      storage_used_gb INTEGER NOT NULL,
+      storage_total_gb INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS library_items (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      visibility TEXT NOT NULL,
+      status TEXT NOT NULL,
+      views INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY,
+      period TEXT NOT NULL,
+      status TEXT NOT NULL,
+      due_at TIMESTAMPTZ NOT NULL,
+      total INTEGER NOT NULL,
+      currency TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS support_cases (
+      id TEXT PRIMARY KEY,
+      subject TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      state TEXT NOT NULL,
+      opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sla TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS timeline_events (
+      id SERIAL PRIMARY KEY,
+      label TEXT NOT NULL,
+      happened_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
   `);
 
-  const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM portal_users;');
-  if (rows[0].count > 0) return;
+  const { rows: userRows } = await pool.query('SELECT COUNT(*)::int AS count FROM portal_users;');
+  if (userRows[0].count === 0) {
+    await pool.query(
+      `INSERT INTO portal_users (email, full_name, portals)
+       VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)
+       ON CONFLICT (email) DO NOTHING;`,
+      [
+        'ava@codex.io',
+        'Ava Winters',
+        ['admin', 'client'],
+        'sam.sales@codex.io',
+        'Sam Carter',
+        ['admin'],
+        'client@sierra-glass.example',
+        'Sierra Glass Client',
+        ['client']
+      ]
+    );
+  }
 
-  await pool.query(
-    `INSERT INTO portal_users (email, full_name, portals)
-     VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9)
-     ON CONFLICT (email) DO NOTHING;`,
-    [
-      'ava@codex.io',
-      'Ava Winters',
-      ['admin', 'client'],
-      'sam.sales@codex.io',
-      'Sam Carter',
-      ['admin'],
-      'client@sierra-glass.example',
-      'Sierra Glass Client',
-      ['client']
-    ]
-  );
+  const { rows: profileRows } = await pool.query('SELECT COUNT(*)::int AS count FROM portal_profile;');
+  if (profileRows[0].count === 0) {
+    const profile = seedData.profile;
+    await pool.query(
+      `INSERT INTO portal_profile (
+        company,
+        contact,
+        email,
+        success_manager,
+        plan,
+        support_level,
+        renewal_date,
+        seats_used,
+        seats_total,
+        storage_used_gb,
+        storage_total_gb
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11);`,
+      [
+        profile.company,
+        profile.contact,
+        profile.email,
+        profile.successManager,
+        profile.plan,
+        profile.supportLevel,
+        profile.renewalDate,
+        profile.seatsUsed,
+        profile.seatsTotal,
+        profile.storageUsedGb,
+        profile.storageTotalGb
+      ]
+    );
+  }
+
+  const { rows: libraryRows } = await pool.query('SELECT COUNT(*)::int AS count FROM library_items;');
+  if (libraryRows[0].count === 0) {
+    const values = seedData.library.flatMap((item) => [item.id, item.title, item.visibility, item.status, item.views, item.updatedAt]);
+    const placeholders = seedData.library
+      .map((_, idx) => `($${idx * 6 + 1}, $${idx * 6 + 2}, $${idx * 6 + 3}, $${idx * 6 + 4}, $${idx * 6 + 5}, $${idx * 6 + 6})`)
+      .join(',');
+    await pool.query(
+      `INSERT INTO library_items (id, title, visibility, status, views, updated_at) VALUES ${placeholders} ON CONFLICT (id) DO NOTHING;`,
+      values
+    );
+  }
+
+  const { rows: invoiceRows } = await pool.query('SELECT COUNT(*)::int AS count FROM invoices;');
+  if (invoiceRows[0].count === 0) {
+    const values = seedData.invoices.flatMap((invoice) => [invoice.id, invoice.period, invoice.status, invoice.dueAt, invoice.total, invoice.currency]);
+    const placeholders = seedData.invoices
+      .map((_, idx) => `($${idx * 6 + 1}, $${idx * 6 + 2}, $${idx * 6 + 3}, $${idx * 6 + 4}, $${idx * 6 + 5}, $${idx * 6 + 6})`)
+      .join(',');
+    await pool.query(`INSERT INTO invoices (id, period, status, due_at, total, currency) VALUES ${placeholders} ON CONFLICT (id) DO NOTHING;`, values);
+  }
+
+  const { rows: supportRows } = await pool.query('SELECT COUNT(*)::int AS count FROM support_cases;');
+  if (supportRows[0].count === 0) {
+    const values = seedData.support.flatMap((item) => [item.id, item.subject, item.priority, item.state, item.openedAt, item.sla]);
+    const placeholders = seedData.support
+      .map((_, idx) => `($${idx * 6 + 1}, $${idx * 6 + 2}, $${idx * 6 + 3}, $${idx * 6 + 4}, $${idx * 6 + 5}, $${idx * 6 + 6})`)
+      .join(',');
+    await pool.query(
+      `INSERT INTO support_cases (id, subject, priority, state, opened_at, sla) VALUES ${placeholders} ON CONFLICT (id) DO NOTHING;`,
+      values
+    );
+  }
+
+  const { rows: timelineRows } = await pool.query('SELECT COUNT(*)::int AS count FROM timeline_events;');
+  if (timelineRows[0].count === 0) {
+    const values = seedData.timeline.flatMap((item) => [item.label, item.timestamp]);
+    const placeholders = seedData.timeline
+      .map((_, idx) => `($${idx * 2 + 1}, $${idx * 2 + 2})`)
+      .join(',');
+    await pool.query(`INSERT INTO timeline_events (label, happened_at) VALUES ${placeholders};`, values);
+  }
 };
 
 const readJsonBody = async (req) => {
@@ -73,7 +197,121 @@ const readJsonBody = async (req) => {
   }
 };
 
-const data = {
+const getProfile = async () => {
+  const { rows } = await pool.query(
+    `SELECT
+      company,
+      contact,
+      email,
+      success_manager AS "successManager",
+      plan,
+      support_level AS "supportLevel",
+      renewal_date AS "renewalDate",
+      seats_used AS "seatsUsed",
+      seats_total AS "seatsTotal",
+      storage_used_gb AS "storageUsedGb",
+      storage_total_gb AS "storageTotalGb"
+    FROM portal_profile
+    LIMIT 1;`
+  );
+
+  if (!rows[0]) {
+    throw new Error('Portal profile not configured');
+  }
+
+  return rows[0];
+};
+
+const getLibraryItems = async () => {
+  const { rows } = await pool.query(
+    `SELECT id, title, visibility, status, views, updated_at AS "updatedAt"
+     FROM library_items
+     ORDER BY updated_at DESC;`
+  );
+  return rows;
+};
+
+const createLibraryItem = async ({ title, visibility, status, views = 0, updatedAt }) => {
+  if (!title || !visibility || !status) {
+    throw new Error('title, visibility, and status are required');
+  }
+
+  const id = `lib-${randomUUID()}`;
+  const updated = updatedAt || new Date().toISOString();
+
+  const { rows } = await pool.query(
+    `INSERT INTO library_items (id, title, visibility, status, views, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, title, visibility, status, views, updated_at AS "updatedAt";`,
+    [id, title, visibility, status, views, updated]
+  );
+
+  return rows[0];
+};
+
+const getInvoices = async () => {
+  const { rows } = await pool.query(
+    `SELECT id, period, status, due_at AS "dueAt", total, currency
+     FROM invoices
+     ORDER BY due_at DESC;`
+  );
+  return rows;
+};
+
+const getSupportCases = async () => {
+  const { rows } = await pool.query(
+    `SELECT id, subject, priority, state, opened_at AS "openedAt", sla
+     FROM support_cases
+     ORDER BY opened_at DESC;`
+  );
+  return rows;
+};
+
+const createSupportCase = async ({ subject, priority = 'Medium', state = 'New', sla = 'Next business day', openedAt }) => {
+  if (!subject) {
+    throw new Error('subject is required');
+  }
+
+  const id = `CASE-${Date.now()}`;
+  const opened = openedAt || new Date().toISOString();
+
+  const { rows } = await pool.query(
+    `INSERT INTO support_cases (id, subject, priority, state, opened_at, sla)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, subject, priority, state, opened_at AS "openedAt", sla;`,
+    [id, subject, priority, state, opened, sla]
+  );
+
+  return rows[0];
+};
+
+const getTimelineEvents = async () => {
+  const { rows } = await pool.query(
+    `SELECT label, happened_at AS "timestamp"
+     FROM timeline_events
+     ORDER BY happened_at DESC;`
+  );
+  return rows;
+};
+
+const addTimelineEvent = async ({ label, timestamp }) => {
+  if (!label) {
+    throw new Error('label is required');
+  }
+
+  const happenedAt = timestamp || new Date().toISOString();
+
+  const { rows } = await pool.query(
+    `INSERT INTO timeline_events (label, happened_at)
+     VALUES ($1, $2)
+     RETURNING label, happened_at AS "timestamp";`,
+    [label, happenedAt]
+  );
+
+  return rows[0];
+};
+
+const seedData = {
   profile: {
     company: 'Sierra Glass',
     contact: 'Ava Winters',
@@ -222,18 +460,18 @@ const fetchVideoSessions = async () => {
 
 const routes = {
   GET: {
-    [`${basePath}/profile`]: () => ({ status: 200, body: data.profile }),
-    [`${basePath}/library`]: () => ({ status: 200, body: data.library }),
-    [`${basePath}/invoices`]: () => ({ status: 200, body: data.invoices }),
-    [`${basePath}/support`]: () => ({ status: 200, body: data.support }),
-    [`${basePath}/timeline`]: () => ({ status: 200, body: data.timeline }),
+    [`${basePath}/profile`]: async () => ({ status: 200, body: await getProfile() }),
+    [`${basePath}/library`]: async () => ({ status: 200, body: await getLibraryItems() }),
+    [`${basePath}/invoices`]: async () => ({ status: 200, body: await getInvoices() }),
+    [`${basePath}/support`]: async () => ({ status: 200, body: await getSupportCases() }),
+    [`${basePath}/timeline`]: async () => ({ status: 200, body: await getTimelineEvents() }),
     [`${basePath}/video-sessions`]: async () => {
       try {
         const sessions = await fetchVideoSessions();
         return { status: 200, body: sessions };
       } catch (error) {
         console.warn('[client-api] falling back to local video sessions', error.message);
-        return { status: 200, body: data.videoSessions };
+        return { status: 200, body: seedData.videoSessions };
       }
     }
   }
@@ -284,6 +522,42 @@ const createOrUpdateUser = async ({ email, name, portals }) => {
 const server = http.createServer(async (req, res) => {
   const { pathname } = new URL(req.url, `http://${req.headers.host}`);
   const method = req.method.toUpperCase();
+
+  if (method === 'POST' && pathname === `${basePath}/library`) {
+    try {
+      const body = await readJsonBody(req);
+      const item = await createLibraryItem(body);
+      json(res, 201, { item });
+    } catch (error) {
+      console.error('[client-api] failed to create library item', error.message);
+      json(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (method === 'POST' && pathname === `${basePath}/support`) {
+    try {
+      const body = await readJsonBody(req);
+      const ticket = await createSupportCase(body);
+      json(res, 201, { ticket });
+    } catch (error) {
+      console.error('[client-api] failed to create support case', error.message);
+      json(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (method === 'POST' && pathname === `${basePath}/timeline`) {
+    try {
+      const body = await readJsonBody(req);
+      const event = await addTimelineEvent(body);
+      json(res, 201, { event });
+    } catch (error) {
+      console.error('[client-api] failed to add timeline event', error.message);
+      json(res, 400, { error: error.message });
+    }
+    return;
+  }
 
   if (method === 'POST' && pathname === `${basePath}/users`) {
     try {

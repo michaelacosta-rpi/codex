@@ -35,14 +35,37 @@ The portal can be deployed as a five-container stack to mirror the broader syste
 
 The admin and client portals now rely on the shared PostgreSQL instance for user identity data. The client API exposes helper endpoints so that users created from the admin side can immediately access the client portal when tagged for that surface.
 
-### Build and run the container
+### Build and run the containers
 
-```
-docker build -t codex-admin-portal .
-docker run -p 4173:80 -e ADMIN_PORTAL_ORIGIN=http://admin codex-admin-portal
-```
+Make sure Docker and Docker Compose are available on your machine ([Docker install guide](https://docs.docker.com/get-docker/), [compose plugin overview](https://docs.docker.com/compose/)). The stack uses three locally built images plus the official PostgreSQL base image.
 
-`ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA will reference for admin communication (defaults to `http://admin:4173`).
+1. **Admin/Client SPA** (shared image driven by nginx):
+
+   ```
+   docker build -t codex-admin-spa:latest .
+   # Run the admin portal directly if you want to test the image without compose
+   docker run -p 4173:80 -e ADMIN_PORTAL_ORIGIN=http://admin codex-admin-spa:latest
+   ```
+
+   `ADMIN_PORTAL_ORIGIN` sets the internal URL the SPA references for admin communication (defaults to `http://admin:4173`). The same image powers the client-facing portal when paired with the client nginx config in `docker/nginx.client.conf`.
+
+2. **Client API** (mock API for the client portal):
+
+   ```
+   docker build -t codex-client-api:latest ./docker/client-api
+   ```
+
+   The Dockerfile installs production dependencies and exposes port `8080` inside the container. Configure service connectivity through `DATABASE_URL` and `VIDEO_SERVICE_URL` (the compose file wires these automatically).
+
+3. **Video hosting service** (demo mediation video backend):
+
+   ```
+   docker build -t codex-video-hosting:latest ./docker/video-hosting-service
+   ```
+
+   The container listens on port `8080` and uses `VIDEO_JOIN_BASE` to craft join links for invites and tokens.
+
+Refer to the [docker build reference](https://docs.docker.com/reference/cli/docker/buildx/build/) if you need alternative build flags (for example, `--platform` or `--build-arg`).
 
 ### Compose the stack
 
@@ -51,6 +74,8 @@ An example `docker-compose.yml` is included to run all services together:
 ```
 docker compose up --build
 ```
+
+If you prefer to build images ahead of time, run the image build commands above and start the compose file without `--build`. See the [Compose CLI reference](https://docs.docker.com/reference/cli/docker/compose/) for details on `up`, `logs`, and `down` behaviors.
 
 The compose file exposes:
 

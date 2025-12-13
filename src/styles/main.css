@@ -1,8 +1,8 @@
 :root {
   --bg: #f5f7fa;
-  --panel: rgba(255, 255, 255, 0.92);
+  --panel: rgba(255, 255, 255, 0.96);
   --panel-strong: #ffffff;
-  --border: rgba(13, 28, 46, 0.18);
+  --border: rgba(13, 28, 46, 0.12);
   --text: #0d1c2e;
   --muted: #5b6675;
   --primary: #1f6feb;
@@ -12,7 +12,7 @@
   --radius-lg: 16px;
   --radius-md: 12px;
   --shadow-soft: 0 18px 40px rgba(13, 28, 46, 0.12);
-  --shadow-card: 0 12px 24px rgba(13, 28, 46, 0.08);
+  --shadow-card: 0 12px 24px rgba(13, 28, 46, 0.06);
 }
 
 * {
@@ -38,13 +38,16 @@ a {
 #app {
   display: flex;
   min-height: 100vh;
+  background: radial-gradient(circle at 18% 14%, rgba(95, 179, 255, 0.1), transparent 32%),
+    radial-gradient(circle at 82% 10%, rgba(31, 111, 235, 0.08), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #edf1f7 100%);
 }
 
 .sidebar {
   width: 280px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(244, 247, 252, 0.9));
   border-right: 1px solid var(--border);
-  padding: 28px 20px;
+  padding: 24px 20px 28px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -62,6 +65,11 @@ a {
   align-items: center;
   gap: 10px;
   color: var(--text);
+}
+
+.brand .chip {
+  background: rgba(31, 111, 235, 0.1);
+  border-color: rgba(31, 111, 235, 0.15);
 }
 
 .chip {
@@ -119,20 +127,57 @@ a {
   flex: 1;
   padding: 32px 36px 40px;
   display: flex;
-  flex-direction: column;
-  gap: 18px;
+  justify-content: center;
 }
 
-.topbar {
+.content-shell {
+  width: min(1200px, 100%);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .topbar-actions {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.page-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .breadcrumbs {
@@ -195,7 +240,7 @@ a {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 18px 20px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-card);
   backdrop-filter: blur(6px);
 }
 
@@ -233,15 +278,21 @@ a {
 
 .table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   margin-top: 10px;
   font-size: 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
 }
 
 .table th,
 .table td {
   border-bottom: 1px solid var(--border);
-  padding: 12px 10px;
+  padding: 12px 12px;
   text-align: left;
 }
 
@@ -251,6 +302,7 @@ a {
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  background: rgba(13, 28, 46, 0.03);
 }
 
 .table tr:hover td {
@@ -287,6 +339,12 @@ a {
   border-color: rgba(31, 111, 235, 0.6);
   color: #ffffff;
   box-shadow: 0 10px 26px rgba(17, 88, 199, 0.24);
+}
+
+.button.ghost {
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
 }
 
 .button.danger {
@@ -358,7 +416,7 @@ textarea {
 }
 
 .notice {
-  background: rgba(13, 28, 46, 0.04);
+  background: rgba(13, 28, 46, 0.03);
   border: 1px dashed var(--border);
   padding: 12px 14px;
   border-radius: 12px;

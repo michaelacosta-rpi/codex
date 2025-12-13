@@ -199,8 +199,11 @@ function renderMain() {
   const crumbs = createEl('div', 'breadcrumbs', [createEl('span', null, ['Home']), createEl('span', null, [activeRoute.label])]);
   const connectionChip = createEl('div', 'chip soft', [`Admin portal: ${adminPortalOrigin}`]);
   const actions = createEl('div', 'topbar-actions', [connectionChip, renderUserMenu()]);
-  const topbar = createEl('div', 'topbar', [crumbs, actions]);
-  main.appendChild(topbar);
+
+  const heading = createEl('div', 'page-header', [
+    createEl('div', 'page-titles', [createEl('div', 'eyebrow', ['Virtual mediation']), createEl('h1', null, [activeRoute.label]), crumbs]),
+    actions
+  ]);
 
   const content = createEl('div', 'content');
   switch (activeRoute.path) {
@@ -229,7 +232,10 @@ function renderMain() {
       content.appendChild(renderDashboard());
   }
 
-  main.appendChild(content);
+  const shell = createEl('div', 'content-shell');
+  shell.appendChild(heading);
+  shell.appendChild(content);
+  main.appendChild(shell);
   return main;
 }
 
